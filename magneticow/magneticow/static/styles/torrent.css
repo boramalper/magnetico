@@ -1,0 +1,74 @@
+header {
+    display: flex;
+    align-items: center;
+    align-content: center;
+
+    width: 100%;
+
+    padding-bottom: 0.833em;
+    border-bottom: 1px solid;
+    margin-bottom: 0.833em;
+}
+
+header div a {
+    text-decoration: none;
+    color: inherit;
+}
+
+header form {
+    max-width: 600px;
+    width: 100%;
+
+    margin-left: 0.5em;
+}
+
+header form input {
+    width: 100%;
+}
+
+header > div {
+    margin-right: 0.5em;
+}
+
+#title h2 {
+    margin-bottom: 0px;
+}
+
+#title {
+    margin-bottom: 0.833em;
+}
+
+#title a {
+    text-decoration: none;
+    color: inherit;
+}
+
+pre {
+    background-color: black;
+    color: white;
+    overflow: auto;
+}
+
+table {
+    max-width: 700px;
+    width: 700px;
+}
+
+th {
+    padding-right: 0.833em;
+}
+
+td {
+    padding-left: 0.833em;
+}
+
+td, th {
+    white-space: nowrap;
+}
+
+th {
+    font-weight: bold;
+    text-align: left;
+
+    width: 1%;
+}

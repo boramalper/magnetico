@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ torrent.name }} - magnetico</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/reset.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/essential.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/torrent.css') }}">
+    <script defer src="{{ url_for('static', filename='scripts/torrent.js') }}"></script>
+</head>
+<body>
+<header>
+    <div><a href="/"><b>magnetico<sup>w</sup></b></a>&#8203;<sub>(pre-alpha)</sub></div>
+    <form action="/torrents" method="get" autocomplete="off" role="search">
+        <input type="search" name="search" placeholder="Search the BitTorrent DHT">
+    </form>
+</header>
+<main>
+    <div id="title">
+        <h2>{{ torrent.name }}</h2>
+        <a href="magnet:?xt=urn:btih:{{ torrent.info_hash }}&dn={{ torrent.name }}">
+            <img src="{{ url_for('static', filename='assets/magnet.gif') }}" alt="Magnet link"
+                         title="Download this torrent using magnet" />
+            <small>{{ torrent.info_hash }}</small>
+        </a>
+    </div>
+
+    <table>
+        <tr>
+            <th scope="row">Size</th>
+            <td>{{ torrent.size }}</td>
+        </tr>
+        <tr>
+            <th scope="row">Discovered on</th>
+            <td>{{ torrent.discovered_on }}</td>
+        </tr>
+        <tr>
+            <th scope="row">Files</th>
+            <td>{{ torrent.files|length }}</td>
+        </tr>
+    </table>
+
+    <h3>Contents</h3>
+    <noscript>
+        <pre>
+{% for file in torrent.files -%}
+{{ file.path }}{{ "\n" }}
+{%- endfor %}
+        </pre>
+    </noscript>
+    <!-- Content of this element will be overwritten by the script -->
+    <pre>{% for file in torrent.files -%}{{ file.path }}{{ "\t" + file.size }}{{ "\n" }}{%- endfor %}</pre>
+</main>
+</body>
+</html>

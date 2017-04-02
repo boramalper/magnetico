@@ -1,0 +1,10 @@
+[Unit]
+Description=magneticow: lightweight web interface for magnetico
+
+[Service]
+ExecStart=~/.local/bin/magneticow --port PORT --user USERNAME PASSWORD
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

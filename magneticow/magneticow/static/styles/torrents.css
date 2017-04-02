@@ -1,0 +1,142 @@
+header {
+    display: flex;
+    align-items: center;
+    align-content: center;
+
+    width: 100%;
+
+    padding-bottom: 0.833em;
+    border-bottom: 1px solid;
+    margin-bottom: 0.833em;
+}
+
+
+header div a {
+    text-decoration: none;
+    color: inherit;
+}
+
+
+header form {
+    max-width: 600px;
+    width: 100%;
+
+    margin-left: 0.5em;
+}
+
+
+header form input {
+    width: 100%;
+}
+
+
+header > div {
+    margin-right: 0.5em;
+}
+
+footer {
+    margin-top: 0.833em;
+
+    display: flex;
+    justify-content: space-between;
+}
+
+
+footer form {
+    display: inline;
+}
+
+
+footer button {
+    font-size: 0.833em;
+}
+
+
+footer button:nth-child(1) {
+    margin-right: 0.833em;
+}
+
+
+footer button:nth-child(2) {
+    margin-left: 0.833em;
+}
+
+
+table {
+    width: 100%;
+}
+
+
+th {
+    font-weight: bold;
+    text-align: left;
+}
+
+
+tbody td, thead th {
+    padding-left: 0.833em;
+    padding-right: 0.833em;
+
+    white-space: nowrap;
+}
+
+
+thead th:nth-child(1) {  /* magnet link */
+    width: 12px;
+}
+
+
+thead th:nth-child(2) {  /* name */
+    max-width: 0;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+
+thead th:nth-child(3) {  /* size */
+    width: 75px;
+}
+
+
+tbody td:nth-child(3n+0) {
+    text-align: right;
+}
+
+
+thead th:nth-child(4) {  /* discovered on */
+    width: 120px;
+}
+
+tbody tr:nth-child(2n+2) {
+    background-color: #efefef;
+}
+
+
+/* table in-borders */
+table {
+    border-collapse: collapse;
+}
+
+table td, table th {
+    border-right: 1px solid black;
+}
+
+table tr:first-child th {
+    border-top: 0;
+}
+
+table tr:last-child td {
+    border-bottom: 0;
+}
+
+table tr td:first-child,
+table tr th:first-child {
+    border-left: 0;
+}
+
+table tr td:last-child,
+table tr th:last-child {
+    border-right: 0;
+}
+
+

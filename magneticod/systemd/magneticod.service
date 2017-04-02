@@ -1,0 +1,10 @@
+[Unit]
+Description=magneticod: autonomous BitTorrent DHT crawler and metadata fetcher
+
+[Service]
+ExecStart=~/.local/bin/magneticod
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

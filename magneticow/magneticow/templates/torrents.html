@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{% if search %}"{{search}}"{% else %}Most recent torrents{% endif %} - magneticow</title>
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/reset.css') }} ">
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/essential.css') }} ">
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/torrents.css') }} ">
+    <!-- <script src="script.js"></script> -->
+</head>
+<body>
+<header>
+    <div><a href="/"><b>magnetico<sup>w</sup></b></a>&#8203;<sub>(pre-alpha)</sub></div>
+    <form action="/torrents" method="get" autocomplete="off" role="search">
+        <input type="search" name="search" placeholder="Search the BitTorrent DHT" value="{{ search }}">
+    </form>
+</header>
+<main>
+    <table>
+        <thead>
+            <tr>
+                <th><!-- Magnet link --></th>
+                <th>Name</th>
+                <th>Size</th>
+                <th>Discovered on</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for torrent in torrents %}
+            <tr>
+                <td><a href="magnet:?xt=urn:btih:{{ torrent.info_hash }}&dn={{ torrent.name }}">
+                    <img src="{{ url_for('static', filename='assets/magnet.gif') }}" alt="Magnet link"
+                         title="Download this torrent using magnet" /></a></td>
+                <td><a href="/torrents/{{ torrent.info_hash }}/{{ torrent.name }}">{{ torrent.name }}</a></td>
+                <td>{{ torrent.size }}</td>
+                <td>{{ torrent.discovered_on }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</main>
+<footer>
+
+    <form action="/torrents" method="get">
+        <button {% if page == 0 %}disabled{% endif %}>Previous</button>
+        <input type="text" name="search" value="{{ search }}" hidden>
+        <input type="number" name="page" value="{{ page - 1 }}" hidden>
+    </form>
+    <form action="/torrents" method="get">
+        <button {% if not next_page_exists %}disabled{% endif %}>Next</button>
+        <input type="text" name="search" value="{{ search }}" hidden>
+        <input type="number" name="page" value="{{ page + 1 }}" hidden>
+    </form>
+</footer>
+</body>
+</html>
