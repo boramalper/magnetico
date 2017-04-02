@@ -29,7 +29,7 @@ Instructions
 ------------
 1. Download the latest version of **magneticod** from PyPI using pip3: ::
 
-       pip3 install magneticod
+       pip3 install magneticod --user
 
 2. Add installation path to the ``$PATH``; append the following line to your ``~/.bashrc`` ::
 

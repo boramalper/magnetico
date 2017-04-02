@@ -36,7 +36,7 @@ Instructions
 
 1. Download the latest version of **magneticow** from PyPI: ::
 
-       pip3 install magneticow
+       pip3 install magneticow --user
 
 2. Add installation path to the ``$PATH``; append the following line to your ``~/.bashrc`` *(you can skip to step 4 if
    you installed magneticod first as advised)* ::
