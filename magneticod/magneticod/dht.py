@@ -24,7 +24,10 @@ import typing
 import configparser
 cfgparser = configparser.ConfigParser()
 cfgparser.read('config.ini')
-dhtport = cfgparser['dht']['port']
+if cfgparser.has_section('dht'):
+    dhtport = cfgparser['dht']['port']
+else:
+    dhtport = '0'
 
 from . import bencode
 
