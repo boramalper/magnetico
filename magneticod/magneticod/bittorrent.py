@@ -176,10 +176,7 @@ class DisposablePeer:
         # In case you cannot read_file hex:
         #   0x14 = 20  (BitTorrent ID indicating that it's an extended message)
         #   0x00 =  0  (Extension ID indicating that it's the handshake message)
-        self.__outgoing_buffer += b"%s\x14\x00%s" % (
-            (2 + len(msg_dict_dump)).to_bytes(4, "big"),
-            msg_dict_dump
-        )
+        self.__outgoing_buffer += b"".join([(2 + len(msg_dict_dump)).to_bytes(4, "big"),b"\x14\x00",msg_dict_dump])
 
     def __on_ext_handshake_message(self, message: bytes) -> None:
         if self.__ext_handshake_complete:
