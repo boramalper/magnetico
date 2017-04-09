@@ -1,0 +1,20 @@
+version: "2"
+
+volumes:
+  shared_db:
+
+services:
+  magneticod:
+    build:
+      context: magneticod
+    volumes:
+      - shared_db:/root/.local/share
+
+  magneticow:
+    build:
+      context: magneticow
+    volumes:
+      - shared_db:/root/.local/share
+
+    ports:
+      - "12345:8080"
