@@ -31,13 +31,17 @@ Instructions
 
        pip3 install magneticod --user
 
-2. Add installation path to the ``$PATH``; append the following line to your ``~/.bashrc`` ::
+2. Add installation path to the ``$PATH``; append the following line to your ``~/.profile`` ::
 
        export PATH=$PATH:~/.local/bin
+       
+   **or if you are on macOS**, (assuming that you are using Python 3.5): ::
+   
+        export PATH="${PATH}:${HOME}/Library/Python/3.5/bin/"
 
 3. Activate the changes to ``$PATH``: ::
 
-       source ~/.bashrc
+       source ~/.profile
 
 4. Confirm that it is running: ::
 
