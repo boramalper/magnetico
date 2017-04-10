@@ -15,6 +15,11 @@ waiting to be discovered within the BitTorrent DHT space, *without relying on an
 **magnetico** liberates BitTorrent from the yoke of centralised trackers & web-sites and makes it *truly
 decentralised*. Finally!
 
+    **NOTICE:**
+    
+    I have finals coming in 3 weeks so I'll be away until 18 May. Wish me luck, and good luck to you too while using
+    **magnetico**!
+
 Features
 ========
 - Easy installation & minimal requirements:
