@@ -12,10 +12,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
+import argparse
 import collections
 import functools
 import logging
+import ipaddress
 import selectors
+import textwrap
+import urllib.parse
 import itertools
 import os
 import sys
@@ -51,8 +55,12 @@ complete_info_hashes = set()
 def main():
     global complete_info_hashes, database, node, peers, selector
 
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s  %(levelname)8s  %(message)s")
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s  %(levelname)-8s  %(message)s")
     logging.info("magneticod v%d.%d.%d started", *__version__)
+
+    arguments = parse_cmdline_arguments()
+    if arguments is None:
+        return 2
 
     # noinspection PyBroadException
     try:
@@ -64,7 +72,7 @@ def main():
 
     complete_info_hashes = database.get_complete_info_hashes()
 
-    node = dht.SybilNode()
+    node = dht.SybilNode(arguments.node_addr)
     node.when_peer_found = on_peer_found
 
     selector.register(node, selectors.EVENT_READ)
@@ -154,6 +162,64 @@ def loop() -> None:
             if fileobj.would_send():
                 selector.modify(fileobj, selectors.EVENT_READ | selectors.EVENT_WRITE)
 
+
+def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
+    parser = argparse.ArgumentParser(
+        description="Autonomous BitTorrent DHT crawler and metadata fetcher.",
+        epilog=textwrap.dedent("""\
+            Copyright (C) 2017  Mert Bora ALPER <bora@boramalper.org>
+            Dedicated to Cemile Binay, in whose hands I thrived.
+
+            This program is free software: you can redistribute it and/or modify it under
+            the terms of the GNU Affero General Public License as published by the Free
+            Software Foundation, either version 3 of the License, or (at your option) any
+            later version.
+
+            This program is distributed in the hope that it will be useful, but WITHOUT ANY
+            WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+            PARTICULAR PURPOSE.  See the GNU Affero General Public License for more
+            details.
+
+            You should have received a copy of the GNU Affero General Public License along
+            with this program.  If not, see <http://www.gnu.org/licenses/>.
+        """),
+        allow_abbrev=False,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--node-addr", action="store", type=str, required=False,
+        help="the address of the (DHT) node magneticod will use"
+    )
+
+    args = parser.parse_args(sys.argv[1:])
+
+    args.node_addr = parse_ip_port(args.node_addr) if args.node_addr else ("0.0.0.0", 0)
+    if args.node_addr is None:
+        logging.critical("Invalid node address supplied!")
+        return None
+
+    return args
+
+
+def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
+    # In case no port supplied
+    try:
+        return str(ipaddress.ip_address(netloc)), 0
+    except ValueError:
+        pass
+
+    # In case port supplied
+    try:
+        parsed = urllib.parse.urlparse("//{}".format(netloc))
+        ip = str(ipaddress.ip_address(parsed.hostname))
+        port = parsed.port
+        if port is None:
+            # Invalid port
+            return None
+    except ValueError:
+        return None
+
+    return ip, port
 
 if __name__ == "__main__":
     sys.exit(main())

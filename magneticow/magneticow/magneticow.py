@@ -101,12 +101,12 @@ def search_torrents():
             "    discovered_on "
             "FROM torrents "
             "INNER JOIN ("
-            "    SELECT torrent_id, rank(matchinfo(fts_torrents, 'pcnxal')) AS rank "
+            "    SELECT docid AS id, rank(matchinfo(fts_torrents, 'pcnxal')) AS rank "
             "    FROM fts_torrents "
             "    WHERE name MATCH ? "
             "    ORDER BY rank ASC"
             "    LIMIT 20 OFFSET ?"
-            ") AS ranktable ON torrents.id=ranktable.torrent_id;",
+            ") AS ranktable USING(id);",
             (search, 20 * page)
         )
         context["torrents"] = [Torrent(t[0].hex(), t[1], utils.to_human_size(t[2]),
@@ -138,7 +138,7 @@ def newest_torrents():
             "  total_size, "
             "  discovered_on "
             "FROM torrents "
-            "ORDER BY discovered_on DESC LIMIT 20 OFFSET ?",
+            "ORDER BY id DESC LIMIT 20 OFFSET ?",
             (20 * page,)
         )
         context["torrents"] = [Torrent(t[0].hex(), t[1], utils.to_human_size(t[2]), datetime.fromtimestamp(t[3]).strftime("%d/%m/%Y"), [])
@@ -187,15 +187,14 @@ def torrent(**kwargs):
         return flask.abort(400)
 
     with magneticod_db:
-        cur = magneticod_db.execute("SELECT name, discovered_on FROM torrents WHERE info_hash=? LIMIT 1;", (info_hash,))
+        cur = magneticod_db.execute("SELECT id, name, discovered_on FROM torrents WHERE info_hash=? LIMIT 1;",
+                                    (info_hash,))
         try:
-            name, discovered_on = cur.fetchone()
+            torrent_id, name, discovered_on = cur.fetchone()
         except TypeError:  # In case no results returned, TypeError will be raised when we try to subscript None object
             return flask.abort(404)
 
-        cur = magneticod_db.execute("SELECT path, size FROM files "
-                                    "WHERE torrent_id=(SELECT id FROM torrents WHERE info_hash=? LIMIT 1);",
-                                    (info_hash,))
+        cur = magneticod_db.execute("SELECT path, size FROM files WHERE torrent_id=?;", (torrent_id,))
         raw_files = cur.fetchall()
         size = sum(f[1] for f in raw_files)
         files = [File(f[0], utils.to_human_size(f[1])) for f in raw_files]
@@ -214,12 +213,15 @@ def get_magneticod_db():
     magneticod_db = flask.g.magneticod_db = sqlite3.connect(magneticod_db_path, isolation_level=None)
 
     with magneticod_db:
-        magneticod_db.execute("CREATE VIRTUAL TABLE temp.fts_torrents USING fts4(torrent_id INTEGER, name TEXT NOT NULL);")
-        magneticod_db.execute("INSERT INTO fts_torrents (torrent_id, name) SELECT id, name FROM torrents;")
+        magneticod_db.execute("PRAGMA journal_mode=WAL;")
+        magneticod_db.execute("PRAGMA temp_store=2;")
+
+        magneticod_db.execute("CREATE VIRTUAL TABLE temp.fts_torrents USING fts4(name);")
+        magneticod_db.execute("INSERT INTO fts_torrents (docid, name) SELECT id, name FROM torrents;")
         magneticod_db.execute("INSERT INTO fts_torrents (fts_torrents) VALUES ('optimize');")
 
         magneticod_db.execute("CREATE TEMPORARY TRIGGER on_torrents_insert AFTER INSERT ON torrents FOR EACH ROW BEGIN"
-                              "    INSERT INTO fts_torrents (torrent_id, name) VALUES (NEW.id, NEW.name);"
+                              "    INSERT INTO fts_torrents (docid, name) VALUES (NEW.id, NEW.name);"
                               "END;")
 
     magneticod_db.create_function("rank", 1, utils.rank)

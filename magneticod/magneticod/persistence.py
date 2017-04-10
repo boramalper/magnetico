@@ -41,16 +41,18 @@ class Database:
         db_conn = sqlite3.connect(database, isolation_level=None)
 
         db_conn.execute("PRAGMA journal_mode=WAL;")
+        db_conn.execute("PRAGMA temp_store = 2;")
         db_conn.execute("PRAGMA foreign_keys=ON;")
 
         with db_conn:
             db_conn.execute("CREATE TABLE IF NOT EXISTS torrents ("
-                            "id             INTEGER PRIMARY KEY,"
+                            "id             INTEGER PRIMARY KEY AUTOINCREMENT,"
                             "info_hash      BLOB NOT NULL UNIQUE,"
                             "name           TEXT NOT NULL,"
                             "total_size     INTEGER NOT NULL CHECK(total_size > 0),"
                             "discovered_on  INTEGER NOT NULL CHECK(discovered_on > 0)"
                             ");")
+            db_conn.execute("CREATE INDEX IF NOT EXISTS info_hash_index ON torrents (info_hash);")
             db_conn.execute("CREATE TABLE IF NOT EXISTS files ("
                             "id          INTEGER PRIMARY KEY,"
                             "torrent_id  INTEGER REFERENCES torrents ON DELETE CASCADE ON UPDATE RESTRICT,"

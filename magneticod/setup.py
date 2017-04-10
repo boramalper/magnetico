@@ -8,7 +8,7 @@ def read_file(path):
 
 setup(
     name="magneticod",
-    version="0.1.0",
+    version="0.2.0",
     description="Autonomous BitTorrent DHT crawler and metadata fetcher.",
     long_description=read_file("README.rst"),
     url="http://magnetico.org",
@@ -22,7 +22,8 @@ setup(
     },
 
     install_requires=[
-        "appdirs>=1.4.3"
+        "appdirs >= 1.4.3",
+        "bencoder.pyx >= 1.1.3"
     ],
 
     classifiers=[

@@ -37,10 +37,10 @@ def rank(blob):
             x.append((x0, x1, x2))
 
     # Ignore the first column (torrent_id)
-    _, avgdl = unpack_from("=LL", blob, 12 + 3*c*p*4)
+    avgdl = unpack_from("=L", blob, 12 + 3*c*p*4)[0]
 
     # Ignore the first column (torrent_id)
-    _, l = unpack_from("=LL", blob, (12 + 3*c*p*4) + 4*c)
+    l = unpack_from("=L", blob, (12 + 3*c*p*4) + 4*c)[0]
 
     # Multiply by -1 so that sorting in the ASC order would yield the best match first
     return -1 * okapi_bm25(term_frequencies=[X[0] for X in x], dl=l, avgdl=avgdl, N=n, nq=[X[2] for X in x])

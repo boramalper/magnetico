@@ -35,14 +35,11 @@ BOOTSTRAPPING_NODES = [
 
 
 class SybilNode:
-    # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will stop;
-    # but until then, the total number of neighbours might exceed the threshold).
-
-    def __init__(self):
+    def __init__(self, address: typing.Tuple[str, int]):
         self.__true_id = self.__random_bytes(20)
 
         self.__socket = socket.socket(type=socket.SOCK_DGRAM)
-        self.__socket.bind(("0.0.0.0", 0))
+        self.__socket.bind(address)
         self.__socket.setblocking(False)
 
         self.__incoming_buffer = array.array("B", (0 for _ in range(65536)))
@@ -52,9 +49,11 @@ class SybilNode:
 
         self.__token_secret = self.__random_bytes(4)
 
+        # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will
+        # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
 
-        logging.debug("SybilNode %s initialized!", self.__true_id.hex().upper())
+        logging.debug("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
     @staticmethod
     def when_peer_found(info_hash: InfoHash, peer_addr: PeerAddress) -> None:
@@ -83,7 +82,7 @@ class SybilNode:
             except bencode.BencodeDecodingError:
                 continue
 
-            if type(message.get(b"r")) is dict and type(message[b"r"].get(b"nodes")) is bytes:
+            if isinstance(message.get(b"r"), dict) and type(message[b"r"].get(b"nodes")) is bytes:
                 self.__on_FIND_NODE_response(message)
             elif message.get(b"q") == b"get_peers":
                 self.__on_GET_PEERS_query(message, addr)

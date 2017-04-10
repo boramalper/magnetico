@@ -33,8 +33,9 @@ class DisposablePeer:
         self.__socket.setblocking(False)
         # To reduce the latency:
         self.__socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
-        if hasattr(socket, 'TCP_QUICKACK'):
+        if hasattr(socket, "TCP_QUICKACK"):
             self.__socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, True)
+
         res = self.__socket.connect_ex(peer_addr)
         if res != errno.EINPROGRESS:
             raise ConnectionError()
