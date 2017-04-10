@@ -47,7 +47,6 @@ peers = collections.defaultdict(list)  # type: typing.DefaultDict[dht.InfoHash, 
 # info hashes whose metadata is valid & complete (OR complete but deemed to be corrupt) so do NOT download them again:
 complete_info_hashes = set()
 
-
 def main():
     global complete_info_hashes, database, node, peers, selector
 
