@@ -21,3 +21,10 @@ main form input {
 main > div {
     margin-right: 0.5em;
 }
+
+footer {
+    margin-top: 0.833em;
+
+    display: flex;
+    justify-content: space-between;
+}
