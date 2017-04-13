@@ -68,13 +68,12 @@ def requires_auth(f):
 @requires_auth
 def home_page():
     magneticod_db = get_magneticod_db()
-    context = {}
 
     with magneticod_db:
         cur = magneticod_db.execute("SELECT count() FROM torrents ;")
         n_torrents = cur.fetchone()[0]
 
-    return flask.render_template("homepage.html",n_torrents=n_torrents)
+    return flask.render_template("homepage.html", n_torrents=n_torrents)
 
 
 @app.route("/torrents/")
