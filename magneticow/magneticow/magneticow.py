@@ -71,13 +71,10 @@ def home_page():
     context = {}
 
     with magneticod_db:
-        cur = magneticod_db.execute(
-            "SELECT"
-            "    count(id) "
-            "FROM torrents ;")
-        context["counter"] = cur.fetchall()
+        cur = magneticod_db.execute("SELECT count() FROM torrents ;")
+        n_torrents = cur.fetchone()[0]
 
-    return flask.render_template("homepage.html",**context)
+    return flask.render_template("homepage.html",n_torrents=n_torrents)
 
 
 @app.route("/torrents/")
