@@ -72,6 +72,10 @@ class SybilNode:
                 data = buffer.tobytes()
             except BlockingIOError:
                 break
+            except ConnectionResetError:
+                continue
+            except ConnectionRefusedError:
+                continue
 
             # Ignore nodes that uses port 0 (assholes).
             if addr[1] == 0:
