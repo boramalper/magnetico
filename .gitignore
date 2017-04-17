@@ -174,3 +174,5 @@ ENV/
 .ropeproject
 
 # End of https://www.gitignore.io/api/linux,python,pycharm
+
+docker-compose.override.yml
