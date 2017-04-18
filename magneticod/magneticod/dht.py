@@ -211,27 +211,11 @@ class SybilNode:
 
     def __bootstrap(self) -> None:
         for addr in BOOTSTRAPPING_NODES:
-            self.__outgoing_queue.append((addr, bencode.dumps({
-                b"y": b"q",
-                b"q": b"find_node",
-                b"t": self.__random_bytes(2),
-                b"a": {
-                    b"id": self.__true_id,
-                    b"target": self.__random_bytes(20)
-                }
-            })))
+            self.__outgoing_queue.append((addr, self.__build_FIND_NODE_query(self.__true_id)))
 
     def __make_neighbours(self) -> None:
         for node_id, addr in self.__routing_table.items():
-            self.__outgoing_queue.append((addr, bencode.dumps({
-                b"y": b"q",
-                b"q": b"find_node",
-                b"t": self.__random_bytes(2),
-                b"a": {
-                    b"id": node_id[:15] + self.__true_id[:5],
-                    b"target": self.__random_bytes(20)
-                }
-            })))
+            self.__outgoing_queue.append((addr, self.__build_FIND_NODE_query(node_id[:15] + self.__true_id[:5])))
 
     @staticmethod
     def __decode_nodes(infos: bytes) -> typing.List[typing.Tuple[NodeID, NodeAddress]]:
@@ -261,3 +245,22 @@ class SybilNode:
     @staticmethod
     def __random_bytes(n: int) -> bytes:
         return random.getrandbits(n * 8).to_bytes(n, "big")
+
+    def __build_FIND_NODE_query(self, id_: bytes) -> bytes:
+        """ BENCODE IMPLEMENTATION
+        bencode.dumps({
+            b"y": b"q",
+            b"q": b"find_node",
+            b"t": self.__random_bytes(2),
+            b"a": {
+                b"id": id_,
+                b"target": self.__random_bytes(20)
+            }
+        })
+        """
+
+        """ Optimized Version """
+        return b"d1:ad2:id20:%s6:target20:%se1:q9:find_node1:t2:aa1:y1:qe" % (
+            id_,
+            self.__random_bytes(20)
+        )
