@@ -19,6 +19,7 @@ import logging
 import random
 import socket
 import typing
+import os
 
 from . import bencode
 
@@ -244,7 +245,7 @@ class SybilNode:
 
     @staticmethod
     def __random_bytes(n: int) -> bytes:
-        return random.getrandbits(n * 8).to_bytes(n, "big")
+        return os.urandom(n)
 
     def __build_FIND_NODE_query(self, id_: bytes) -> bytes:
         """ BENCODE IMPLEMENTATION
