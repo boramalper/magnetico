@@ -19,6 +19,7 @@ import math
 import socket
 import random
 import typing
+import os
 
 from . import bencode
 
@@ -287,4 +288,4 @@ class DisposablePeer:
 
     @staticmethod
     def __random_bytes(n: int) -> bytes:
-        return random.getrandbits(n * 8).to_bytes(n, "big")
+        return os.urandom(n)
