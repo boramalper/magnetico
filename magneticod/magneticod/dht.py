@@ -16,7 +16,6 @@ import array
 import collections
 import zlib
 import logging
-import random
 import socket
 import typing
 import os
@@ -54,7 +53,7 @@ class SybilNode:
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
 
-        logging.debug("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
+        logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
     @staticmethod
     def when_peer_found(info_hash: InfoHash, peer_addr: PeerAddress) -> None:
@@ -165,7 +164,7 @@ class SybilNode:
             return
 
         # appendleft to prioritise GET_PEERS responses as they are the most fruitful ones!
-        self.__outgoing_queue.append((addr, bencode.dumps({
+        self.__outgoing_queue.appendleft((addr, bencode.dumps({
             b"y": b"r",
             b"t": transaction_id,
             b"r": {

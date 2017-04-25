@@ -14,6 +14,7 @@
 # <http://www.gnu.org/licenses/>.
 
 import argparse
+import logging
 import sys
 import textwrap
 
@@ -23,15 +24,22 @@ from magneticow import magneticow
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
+
     arguments = parse_args()
     magneticow.app.arguments = arguments
 
     http_server = gevent.wsgi.WSGIServer(("", arguments.port), magneticow.app)
 
+    magneticow.initialize_magneticod_db()
+
     try:
+        logging.info("magneticow is ready to serve!")
         http_server.serve_forever()
     except KeyboardInterrupt:
         return 0
+    finally:
+        magneticow.close_db()
 
     return 1
 

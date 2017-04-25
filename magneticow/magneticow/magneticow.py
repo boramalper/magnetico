@@ -15,6 +15,7 @@
 import collections
 import functools
 from datetime import datetime
+import logging
 import sqlite3
 import os
 
@@ -30,6 +31,10 @@ Torrent = collections.namedtuple("torrent", ["info_hash", "name", "size", "disco
 
 app = flask.Flask(__name__)
 app.config.from_object(__name__)
+
+# TODO: We should have been able to use flask.g but it does NOT persist across different requests so we resort back to
+# this. Investigate the cause and fix it (I suspect of Gevent).
+magneticod_db = None
 
 
 # Adapted from: http://flask.pocoo.org/snippets/8/
@@ -67,10 +72,8 @@ def requires_auth(f):
 @app.route("/")
 @requires_auth
 def home_page():
-    magneticod_db = get_magneticod_db()
-
     with magneticod_db:
-        cur = magneticod_db.execute("SELECT count() FROM torrents ;")
+        cur = magneticod_db.execute("SELECT MAX(ROWID) FROM torrents ;")
         n_torrents = cur.fetchone()[0]
 
     return flask.render_template("homepage.html", n_torrents=n_torrents)
@@ -88,8 +91,6 @@ def torrents():
 
 
 def search_torrents():
-    magneticod_db = get_magneticod_db()
-
     search = flask.request.args["search"]
     page = int(flask.request.args.get("page", 0))
 
@@ -128,8 +129,6 @@ def search_torrents():
 
 
 def newest_torrents():
-    magneticod_db = get_magneticod_db()
-
     page = int(flask.request.args.get("page", 0))
 
     context = {
@@ -162,8 +161,6 @@ def newest_torrents():
 @app.route("/torrents/<info_hash>/", defaults={"name": None})
 @requires_auth
 def torrent_redirect(**kwargs):
-    magnetico_db = get_magneticod_db()
-
     try:
         info_hash = bytes.fromhex(kwargs["info_hash"])
         assert len(info_hash) == 20
@@ -183,7 +180,6 @@ def torrent_redirect(**kwargs):
 @app.route("/torrents/<info_hash>/<name>")
 @requires_auth
 def torrent(**kwargs):
-    magneticod_db = get_magneticod_db()
     context = {}
 
     try:
@@ -210,13 +206,13 @@ def torrent(**kwargs):
     return flask.render_template("torrent.html", **context)
 
 
-def get_magneticod_db():
-    """ Opens a new database connection if there is none yet for the current application context. """
-    if hasattr(flask.g, "magneticod_db"):
-        return flask.g.magneticod_db
+def initialize_magneticod_db() -> None:
+    global magneticod_db
+
+    logging.info("Connecting to magneticod's database...")
 
     magneticod_db_path = os.path.join(appdirs.user_data_dir("magneticod"), "database.sqlite3")
-    magneticod_db = flask.g.magneticod_db = sqlite3.connect(magneticod_db_path, isolation_level=None)
+    magneticod_db = sqlite3.connect(magneticod_db_path, isolation_level=None)
 
     with magneticod_db:
         magneticod_db.execute("PRAGMA journal_mode=WAL;")
@@ -232,11 +228,8 @@ def get_magneticod_db():
 
     magneticod_db.create_function("rank", 1, utils.rank)
 
-    return magneticod_db
 
-
-@app.teardown_appcontext
-def close_magneticod_db(error):
-    """ Closes the database again at the end of the request. """
-    if hasattr(flask.g, "magneticod_db"):
-        flask.g.magneticod_db.close()
+def close_db() -> None:
+    logging.info("Closing magneticod database...")
+    if magneticod_db is not None:
+        magneticod_db.close()

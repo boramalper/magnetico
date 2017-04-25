@@ -55,7 +55,7 @@ complete_info_hashes = set()
 def main():
     global complete_info_hashes, database, node, peers, selector
 
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s  %(levelname)-8s  %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
     logging.info("magneticod v%d.%d.%d started", *__version__)
 
     arguments = parse_cmdline_arguments()
@@ -132,6 +132,9 @@ def on_peer_error(peer: bittorrent.DisposablePeer, info_hash: dht.InfoHash) -> N
     selector.unregister(peer)
 
 
+# TODO:
+# Consider whether time.monotonic() is a good choice. Maybe we should use CLOCK_MONOTONIC_RAW as its not affected by NTP
+# adjustments, and all we need is how many seconds passed since a certain point in time.
 def loop() -> None:
     global selector, node, peers
 
@@ -146,6 +149,9 @@ def loop() -> None:
                 logging.warning("Belated TICK! (Δ = %d)", delta)
 
             node.on_tick()
+            for peer_list in peers.values():
+                for peer in peer_list:
+                    peer.on_tick()
 
             t0 = time.monotonic()
 

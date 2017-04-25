@@ -119,7 +119,7 @@ class Database:
                 self.__pending_files
             )
             cur.execute("COMMIT;")
-            logging.debug("%d metadata (%d files) are committed to the database.",
+            logging.info("%d metadata (%d files) are committed to the database.",
                           len(self.__pending_metadata), len(self.__pending_files))
             self.__pending_metadata.clear()
             self.__pending_files.clear()

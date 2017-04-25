@@ -17,7 +17,6 @@ import logging
 import hashlib
 import math
 import socket
-import random
 import typing
 import os
 
@@ -57,6 +56,9 @@ class DisposablePeer:
         # To prevent double shutdown
         self.__shutdown = False
 
+        # After 120 ticks passed, a peer should report an error and shut itself down due to being stall.
+        self.__ticks_passed = 0
+
         # Send the BitTorrent handshake message (0x13 = 19 in decimal, the length of the handshake message)
         self.__outgoing_buffer += b"\x13BitTorrent protocol%s%s%s" % (
             b"\x00\x00\x00\x00\x00\x10\x00\x01",
@@ -71,6 +73,13 @@ class DisposablePeer:
     @staticmethod
     def when_metadata_found(info_hash: InfoHash, metadata: bytes) -> None:
         raise NotImplementedError()
+
+    def on_tick(self):
+        self.__ticks_passed += 1
+
+        if self.__ticks_passed == 120:
+            logging.debug("Peer failed to fetch metadata in time for info hash %s!", self.__info_hash.hex())
+            self.when_error()
 
     def on_receivable(self) -> None:
         while True:
@@ -211,6 +220,8 @@ class DisposablePeer:
         except MemoryError:
             logging.exception("Could not allocate %.1f KiB for the metadata!", metadata_size / 1024)
             self.when_error()
+            return
+
         self.__metadata_size = metadata_size
         self.__ext_handshake_complete = True
 

@@ -8,7 +8,7 @@ def read_file(path):
 
 setup(
     name="magneticod",
-    version="0.2.0",
+    version="0.3.0",
     description="Autonomous BitTorrent DHT crawler and metadata fetcher.",
     long_description=read_file("README.rst"),
     url="http://magnetico.org",
