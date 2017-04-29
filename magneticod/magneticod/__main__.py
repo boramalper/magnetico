@@ -167,6 +167,8 @@ def loop() -> None:
             fileobj = keymap[fd].fileobj
             if fileobj.would_send():
                 selector.modify(fileobj, selectors.EVENT_READ | selectors.EVENT_WRITE)
+            else:
+                selector.modify(fileobj, selectors.EVENT_READ)
 
 
 def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
