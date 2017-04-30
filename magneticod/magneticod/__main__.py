@@ -52,16 +52,14 @@ complete_info_hashes = set()
 def main():
     global complete_info_hashes, database, node, peers, selector
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
-    logging.info("magneticod v%d.%d.%d started", *__version__)
-
     arguments = parse_cmdline_arguments()
-    if arguments is None:
-        return 2
+
+    logging.basicConfig(level=arguments.loglevel, format="%(asctime)s  %(levelname)-8s  %(message)s")
+    logging.info("magneticod v%d.%d.%d started", *__version__)
 
     # noinspection PyBroadException
     try:
-        path =arguments.database_file
+        path = arguments.database_file
         database = persistence.Database(path)
     except:
         logging.exception("could NOT connect to the database!")
@@ -234,9 +232,12 @@ def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
         "--database-file", type=str, default=default_database_dir,
         help="Path to database file (default: {})".format(default_database_dir)
     )
-
-    args = parser.parse_args(sys.argv[1:])
-    return args
+    parser.add_argument(
+        '-d', '--debug',
+        action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.INFO,
+        help="Print debugging information in addition to normal processing.",
+    )
+    return parser.parse_args(sys.argv[1:])
 
 
 if __name__ == "__main__":
