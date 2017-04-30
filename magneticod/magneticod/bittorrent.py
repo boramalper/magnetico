@@ -22,6 +22,7 @@ import os
 
 from . import bencode
 
+MAX_METADATA_SIZE = 5*1024*1024
 
 InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
@@ -209,7 +210,8 @@ class DisposablePeer:
             # Just to make sure that the remote peer supports ut_metadata extension:
             ut_metadata = msg_dict[b"m"][b"ut_metadata"]
             metadata_size = msg_dict[b"metadata_size"]
-            assert metadata_size > 0
+            assert metadata_size > 0, "Invalid (empty) metada size"
+            assert metadata_size < MAX_METADATA_SIZE, "Malicious or malfunctioning peer tried send a huge metadata size"
         except (AssertionError, KeyError):
             self.when_error()
             return
