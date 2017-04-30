@@ -20,6 +20,7 @@ import socket
 import typing
 import os
 
+from .constants import BOOTSTRAPPING_NODES, DEFAULT_MAX_METADATA_SIZE
 from . import bencode
 
 NodeID = bytes
@@ -28,14 +29,8 @@ PeerAddress = typing.Tuple[str, int]
 InfoHash = bytes
 
 
-BOOTSTRAPPING_NODES = [
-    ("router.bittorrent.com", 6881),
-    ("dht.transmissionbt.com", 6881)
-]
-
-
 class SybilNode:
-    def __init__(self, address: typing.Tuple[str, int]):
+    def __init__(self, address: typing.Tuple[str, int], max_metadata_size: int=DEFAULT_MAX_METADATA_SIZE):
         self.__true_id = self.__random_bytes(20)
 
         self.__socket = socket.socket(type=socket.SOCK_DGRAM)
@@ -48,7 +43,7 @@ class SybilNode:
         self.__routing_table = {}  # type: typing.Dict[NodeID, NodeAddress]
 
         self.__token_secret = self.__random_bytes(4)
-
+        self.__max_metadata_size = max_metadata_size
         # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
@@ -56,7 +51,8 @@ class SybilNode:
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
     @staticmethod
-    def when_peer_found(info_hash: InfoHash, peer_addr: PeerAddress) -> None:
+    def when_peer_found(info_hash: InfoHash, peer_addr: PeerAddress,
+                        max_metadata_size: int=DEFAULT_MAX_METADATA_SIZE) -> None:
         raise NotImplementedError()
 
     def on_tick(self) -> None:
@@ -208,7 +204,7 @@ class SybilNode:
         else:
             peer_addr = (addr[0], port)
 
-        self.when_peer_found(info_hash, peer_addr)
+        self.when_peer_found(info_hash, peer_addr, self.max_metadata_size)
 
     def fileno(self) -> int:
         return self.__socket.fileno()

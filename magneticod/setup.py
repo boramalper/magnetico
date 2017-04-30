@@ -23,7 +23,8 @@ setup(
 
     install_requires=[
         "appdirs >= 1.4.3",
-        "bencoder.pyx >= 1.1.3"
+        "bencoder.pyx >= 1.1.3",
+        "humanfriendly"
     ],
 
     classifiers=[

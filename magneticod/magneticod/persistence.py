@@ -18,11 +18,9 @@ import time
 import typing
 import os
 
-from . import bencode
-
-
 # threshold for pending info hashes before being committed to database:
-PENDING_INFO_HASHES = 10
+
+from .constants import PENDING_INFO_HASHES
 
 
 class Database:

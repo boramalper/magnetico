@@ -21,15 +21,14 @@ import typing
 import os
 
 from . import bencode
-
-MAX_METADATA_SIZE = 5*1024*1024
+from .constants import DEFAULT_MAX_METADATA_SIZE
 
 InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
 
 
 class DisposablePeer:
-    def __init__(self, info_hash: InfoHash, peer_addr: PeerAddress):
+    def __init__(self, info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int= DEFAULT_MAX_METADATA_SIZE):
         self.__socket = socket.socket()
         self.__socket.setblocking(False)
         # To reduce the latency:
@@ -42,6 +41,8 @@ class DisposablePeer:
             raise ConnectionError()
 
         self.__info_hash = info_hash
+
+        self.__max_metadata_size = max_metadata_size
 
         self.__incoming_buffer = bytearray()
         self.__outgoing_buffer = bytearray()
@@ -211,7 +212,8 @@ class DisposablePeer:
             ut_metadata = msg_dict[b"m"][b"ut_metadata"]
             metadata_size = msg_dict[b"metadata_size"]
             assert metadata_size > 0, "Invalid (empty) metada size"
-            assert metadata_size < MAX_METADATA_SIZE, "Malicious or malfunctioning peer tried send a huge metadata size"
+            assert metadata_size < self.__max_metadata_size, "Malicious or malfunctioning peer tried send above " \
+                                                             "{} limit metadata size".format(self.__max_metadata_size)
         except (AssertionError, KeyError):
             self.when_error()
             return
