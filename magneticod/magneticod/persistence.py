@@ -13,13 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
 import logging
+import os
 import sqlite3
 import time
 import typing
-import os
 
-from magneticod import bencode
-
+from . import bencode
 from .constants import PENDING_INFO_HASHES
 
 
@@ -32,6 +31,7 @@ class Database:
         self.__pending_metadata = []  # type: typing.List[typing.Tuple[bytes, str, int, int]]
         # list of tuple (info_hash, size, path)
         self.__pending_files = []  # type: typing.List[typing.Tuple[bytes, int, bytes]]
+        self.last_commit_time = time.time()
 
     @staticmethod
     def __connect(database) -> sqlite3.Connection:
@@ -117,8 +117,9 @@ class Database:
                 self.__pending_files
             )
             cur.execute("COMMIT;")
-            logging.info("%d metadata (%d files) are committed to the database.",
-                          len(self.__pending_metadata), len(self.__pending_files))
+            speed = len(self.__pending_metadata) / (time.time() - self.last_commit_time)
+            logging.info("%d metadata (%d files) are committed to the database Speed is %0.2f metadata / s.",
+                         len(self.__pending_metadata), len(self.__pending_files), speed)
             self.__pending_metadata.clear()
             self.__pending_files.clear()
         except:
@@ -126,6 +127,7 @@ class Database:
             logging.exception("Could NOT commit metadata to the database! (%d metadata are pending)",
                               len(self.__pending_metadata))
         finally:
+            self.last_commit_time = time.time()
             cur.close()
 
     def close(self) -> None:
