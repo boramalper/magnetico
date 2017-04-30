@@ -168,6 +168,26 @@ def loop() -> None:
                 selector.modify(fileobj, selectors.EVENT_READ)
 
 
+def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
+    # In case no port supplied
+    try:
+        return str(ipaddress.ip_address(netloc)), 0
+    except ValueError:
+        pass
+
+    # In case port supplied
+    try:
+        parsed = urllib.parse.urlparse("//{}".format(netloc))
+        ip = str(ipaddress.ip_address(parsed.hostname))
+        port = parsed.port
+        if port is None:
+            raise argparse.ArgumentParser("Invalid node address supplied!")
+    except ValueError:
+        raise argparse.ArgumentParser("Invalid node address supplied!")
+
+    return ip, port
+
+
 def parse_size(value: str) -> int:
     try:
         return humanfriendly.parse_size(value)
@@ -200,7 +220,7 @@ def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
     )
 
     parser.add_argument(
-        "--node-addr", action="store", type=str, required=False,
+        "--node-addr", action="store", type=parse_ip_port, required=False, default="0.0.0.0:0",
         help="the address of the (DHT) node magneticod will use"
     )
 
@@ -216,34 +236,8 @@ def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
     )
 
     args = parser.parse_args(sys.argv[1:])
-    print(args.metadata_size_limit)
-    args.node_addr = parse_ip_port(args.node_addr) if args.node_addr else ("0.0.0.0", 0)
-    if args.node_addr is None:
-        logging.critical("Invalid node address supplied!")
-        return None
-
     return args
 
-
-def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
-    # In case no port supplied
-    try:
-        return str(ipaddress.ip_address(netloc)), 0
-    except ValueError:
-        pass
-
-    # In case port supplied
-    try:
-        parsed = urllib.parse.urlparse("//{}".format(netloc))
-        ip = str(ipaddress.ip_address(parsed.hostname))
-        port = parsed.port
-        if port is None:
-            # Invalid port
-            return None
-    except ValueError:
-        return None
-
-    return ip, port
 
 if __name__ == "__main__":
     sys.exit(main())
