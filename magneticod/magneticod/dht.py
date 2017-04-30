@@ -204,7 +204,7 @@ class SybilNode:
         else:
             peer_addr = (addr[0], port)
 
-        self.when_peer_found(info_hash, peer_addr, self.max_metadata_size)
+        self.when_peer_found(info_hash, peer_addr, self.__max_metadata_size)
 
     def fileno(self) -> int:
         return self.__socket.fileno()
