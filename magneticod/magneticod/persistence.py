@@ -21,6 +21,7 @@ import os
 from magneticod import bencode
 
 from .constants import PENDING_INFO_HASHES
+from . import bencode
 
 
 class Database:
@@ -94,11 +95,11 @@ class Database:
 
         return True
 
-    def get_complete_info_hashes(self) -> typing.Set[bytes]:
+    def get_complete_info_hashes(self) -> typing.Generator[str, None, None]:
         cur = self.__db_conn.cursor()
         try:
             cur.execute("SELECT info_hash FROM torrents;")
-            return set(x[0] for x in cur.fetchall())
+            return (x[0] for x in cur.fetchall())
         finally:
             cur.close()
 
