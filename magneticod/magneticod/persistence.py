@@ -18,8 +18,6 @@ import time
 import typing
 import os
 
-# threshold for pending info hashes before being committed to database:
-
 from .constants import PENDING_INFO_HASHES
 
 
