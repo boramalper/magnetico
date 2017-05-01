@@ -27,16 +27,13 @@ import time
 import typing
 
 import appdirs
+import humanfriendly
 
+from .constants import TICK_INTERVAL, MAX_ACTIVE_PEERS_PER_INFO_HASH, DEFAULT_MAX_METADATA_SIZE
 from . import __version__
 from . import bittorrent
 from . import dht
 from . import persistence
-
-
-TICK_INTERVAL = 1  # in seconds (soft constraint)
-# maximum (inclusive) number of active (disposable) peers to fetch the metadata per info hash at the same time:
-MAX_ACTIVE_PEERS_PER_INFO_HASH = 5
 
 
 # Global variables are bad bla bla bla, BUT these variables are used so many times that I think it is justified; else
@@ -55,16 +52,14 @@ complete_info_hashes = set()
 def main():
     global complete_info_hashes, database, node, peers, selector
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
-    logging.info("magneticod v%d.%d.%d started", *__version__)
-
     arguments = parse_cmdline_arguments()
-    if arguments is None:
-        return 2
+
+    logging.basicConfig(level=arguments.loglevel, format="%(asctime)s  %(levelname)-8s  %(message)s")
+    logging.info("magneticod v%d.%d.%d started", *__version__)
 
     # noinspection PyBroadException
     try:
-        path = os.path.join(appdirs.user_data_dir("magneticod"), "database.sqlite3")
+        path = arguments.database_file
         database = persistence.Database(path)
     except:
         logging.exception("could NOT connect to the database!")
@@ -73,7 +68,10 @@ def main():
     complete_info_hashes = database.get_complete_info_hashes()
 
     node = dht.SybilNode(arguments.node_addr)
-    node.when_peer_found = on_peer_found
+
+    node.when_peer_found = lambda info_hash, peer_address: on_peer_found(info_hash=info_hash,
+                                                                         peer_address=peer_address,
+                                                                         max_metadata_size=arguments.max_metadata_size)
 
     selector.register(node, selectors.EVENT_READ)
 
@@ -92,14 +90,14 @@ def main():
     return 0
 
 
-def on_peer_found(info_hash: dht.InfoHash, peer_address) -> None:
+def on_peer_found(info_hash: dht.InfoHash, peer_address, max_metadata_size: int=DEFAULT_MAX_METADATA_SIZE) -> None:
     global selector, peers, complete_info_hashes
 
     if len(peers[info_hash]) > MAX_ACTIVE_PEERS_PER_INFO_HASH or info_hash in complete_info_hashes:
         return
 
     try:
-        peer = bittorrent.DisposablePeer(info_hash, peer_address)
+        peer = bittorrent.DisposablePeer(info_hash, peer_address, max_metadata_size)
     except ConnectionError:
         return
 
@@ -171,6 +169,33 @@ def loop() -> None:
                 selector.modify(fileobj, selectors.EVENT_READ)
 
 
+def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
+    # In case no port supplied
+    try:
+        return str(ipaddress.ip_address(netloc)), 0
+    except ValueError:
+        pass
+
+    # In case port supplied
+    try:
+        parsed = urllib.parse.urlparse("//{}".format(netloc))
+        ip = str(ipaddress.ip_address(parsed.hostname))
+        port = parsed.port
+        if port is None:
+            raise argparse.ArgumentParser("Invalid node address supplied!")
+    except ValueError:
+        raise argparse.ArgumentParser("Invalid node address supplied!")
+
+    return ip, port
+
+
+def parse_size(value: str) -> int:
+    try:
+        return humanfriendly.parse_size(value)
+    except humanfriendly.InvalidSize as e:
+        raise argparse.ArgumentTypeError("Invalid argument. {}".format(e))
+
+
 def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
     parser = argparse.ArgumentParser(
         description="Autonomous BitTorrent DHT crawler and metadata fetcher.",
@@ -194,40 +219,29 @@ def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
         allow_abbrev=False,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
+
     parser.add_argument(
-        "--node-addr", action="store", type=str, required=False,
+        "--node-addr", action="store", type=parse_ip_port, required=False, default="0.0.0.0:0",
         help="the address of the (DHT) node magneticod will use"
     )
 
-    args = parser.parse_args(sys.argv[1:])
+    parser.add_argument(
+        "--max-metadata-size", type=parse_size, default=DEFAULT_MAX_METADATA_SIZE,
+        help="Limit metadata size to protect memory overflow. Provide in human friendly format eg. 1 M, 1 GB"
+    )
 
-    args.node_addr = parse_ip_port(args.node_addr) if args.node_addr else ("0.0.0.0", 0)
-    if args.node_addr is None:
-        logging.critical("Invalid node address supplied!")
-        return None
+    default_database_dir = os.path.join(appdirs.user_data_dir("magneticod"), "database.sqlite3")
+    parser.add_argument(
+        "--database-file", type=str, default=default_database_dir,
+        help="Path to database file (default: {})".format(humanfriendly.format_path(default_database_dir))
+    )
+    parser.add_argument(
+        '-d', '--debug',
+        action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.INFO,
+        help="Print debugging information in addition to normal processing.",
+    )
+    return parser.parse_args(sys.argv[1:])
 
-    return args
-
-
-def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
-    # In case no port supplied
-    try:
-        return str(ipaddress.ip_address(netloc)), 0
-    except ValueError:
-        pass
-
-    # In case port supplied
-    try:
-        parsed = urllib.parse.urlparse("//{}".format(netloc))
-        ip = str(ipaddress.ip_address(parsed.hostname))
-        port = parsed.port
-        if port is None:
-            # Invalid port
-            return None
-    except ValueError:
-        return None
-
-    return ip, port
 
 if __name__ == "__main__":
     sys.exit(main())

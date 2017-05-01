@@ -20,18 +20,13 @@ import socket
 import typing
 import os
 
+from .constants import BOOTSTRAPPING_NODES, DEFAULT_MAX_METADATA_SIZE
 from . import bencode
 
 NodeID = bytes
 NodeAddress = typing.Tuple[str, int]
 PeerAddress = typing.Tuple[str, int]
 InfoHash = bytes
-
-
-BOOTSTRAPPING_NODES = [
-    ("router.bittorrent.com", 6881),
-    ("dht.transmissionbt.com", 6881)
-]
 
 
 class SybilNode:
@@ -48,7 +43,6 @@ class SybilNode:
         self.__routing_table = {}  # type: typing.Dict[NodeID, NodeAddress]
 
         self.__token_secret = self.__random_bytes(4)
-
         # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
