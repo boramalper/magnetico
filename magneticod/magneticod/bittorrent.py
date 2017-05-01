@@ -37,7 +37,8 @@ class DisposablePeer:
             self.__socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, True)
 
         res = self.__socket.connect_ex(peer_addr)
-        if res != errno.EINPROGRESS:
+        # We either connected or connection is in progress:
+        if not res in (0, errno.EINPROGRESS, errno.EAGAIN, errno.WSAEWOULDBLOCK):
             raise ConnectionError()
 
         self.__peer_addr = peer_addr
