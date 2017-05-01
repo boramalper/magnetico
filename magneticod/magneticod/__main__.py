@@ -233,7 +233,7 @@ def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
     default_database_dir = os.path.join(appdirs.user_data_dir("magneticod"), "database.sqlite3")
     parser.add_argument(
         "--database-file", type=str, default=default_database_dir,
-        help="Path to database file (default: {})".format(default_database_dir)
+        help="Path to database file (default: {})".format(humanfriendly.format_path(default_database_dir))
     )
     parser.add_argument(
         '-d', '--debug',
