@@ -131,4 +131,6 @@ class Database:
             cur.close()
 
     def close(self) -> None:
+        if self.__pending_metadata:
+            self.__commit_metadata()
         self.__db_conn.close()
