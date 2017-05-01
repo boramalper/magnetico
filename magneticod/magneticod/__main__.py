@@ -67,8 +67,11 @@ def main():
 
     complete_info_hashes = database.get_complete_info_hashes()
 
-    node = dht.SybilNode(arguments.node_addr, max_metadata_size=arguments.metadata_size_limit)
-    node.when_peer_found = on_peer_found
+    node = dht.SybilNode(arguments.node_addr)
+
+    node.when_peer_found = lambda info_hash, peer_address: on_peer_found(info_hash=info_hash,
+                                                                         peer_address=peer_address,
+                                                                         max_metadata_size=arguments.max_metadata_size)
 
     selector.register(node, selectors.EVENT_READ)
 
@@ -223,8 +226,8 @@ def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
     )
 
     parser.add_argument(
-        "--metadata-size-limit", type=parse_size, default=DEFAULT_MAX_METADATA_SIZE,
-        help="Limit metadata size to protect memory overflow"
+        "--max-metadata-size", type=parse_size, default=DEFAULT_MAX_METADATA_SIZE,
+        help="Limit metadata size to protect memory overflow. Provide in human friendly format eg. 1 M, 1 GB"
     )
 
     default_database_dir = os.path.join(appdirs.user_data_dir("magneticod"), "database.sqlite3")

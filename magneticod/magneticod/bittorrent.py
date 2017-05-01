@@ -40,6 +40,7 @@ class DisposablePeer:
         if res != errno.EINPROGRESS:
             raise ConnectionError()
 
+        self.__peer_addr = peer_addr
         self.__info_hash = info_hash
 
         self.__max_metadata_size = max_metadata_size
@@ -211,10 +212,16 @@ class DisposablePeer:
             # Just to make sure that the remote peer supports ut_metadata extension:
             ut_metadata = msg_dict[b"m"][b"ut_metadata"]
             metadata_size = msg_dict[b"metadata_size"]
-            assert metadata_size > 0, "Invalid (empty) metada size"
-            assert metadata_size < self.__max_metadata_size, "Malicious or malfunctioning peer tried send above " \
-                                                             "{} limit metadata size".format(self.__max_metadata_size)
-        except (AssertionError, KeyError):
+            assert metadata_size > 0, "Invalid (empty) metadata size"
+            assert metadata_size < self.__max_metadata_size, "Malicious or malfunctioning peer {}:{} tried send above" \
+                                                             " {} max metadata size".format(self.__peer_addr[0],
+                                                                                            self.__peer_addr[1],
+                                                                                            self.__max_metadata_size)
+        except KeyError:
+            self.when_error()
+            return
+        except AssertionError as e:
+            logging.debug(str(e))
             self.when_error()
             return
 
