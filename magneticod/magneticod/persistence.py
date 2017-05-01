@@ -32,6 +32,8 @@ class Database:
         # list of tuple (info_hash, size, path)
         self.__pending_files = []  # type: typing.List[typing.Tuple[bytes, int, bytes]]
         self.last_commit_time = time.clock()
+        self.total_metadata_commited = 0
+        self.start_time = time.clock()
 
     @staticmethod
     def __connect(database) -> sqlite3.Connection:
@@ -120,6 +122,7 @@ class Database:
             speed = len(self.__pending_metadata) / (time.clock() - self.last_commit_time)
             logging.info("%d metadata (%d files) are committed to the database Speed is %0.2f metadata / s.",
                          len(self.__pending_metadata), len(self.__pending_files), speed)
+            self.total_metadata_commited += len(self.__pending_metadata)
             self.__pending_metadata.clear()
             self.__pending_files.clear()
         except:
@@ -133,4 +136,7 @@ class Database:
     def close(self) -> None:
         if self.__pending_metadata:
             self.__commit_metadata()
+        speed = self.total_metadata_commited / (time.clock() - self.start_time)
+        logging.info("Saved %d metadata record in session. Average speed %0.2f metadata / s." %
+                     (self.total_metadata_commited, speed))
         self.__db_conn.close()
