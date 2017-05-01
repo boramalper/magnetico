@@ -3,6 +3,9 @@ magnetico
 =========
 *Autonomous (self-hosted) BitTorrent DHT search engine suite.*
 
+.. image:: https://badges.gitter.im/gitterHQ/gitter.png
+   :target: https://gitter.im/magnetico-dev/magnetico-dev
+
 magnetico is the first autonomous (self-hosted) BitTorrent DHT search engine suite that is *designed for end-users*.
 The suite consists of two packages:
 
