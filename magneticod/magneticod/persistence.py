@@ -18,6 +18,8 @@ import time
 import typing
 import os
 
+from magneticod import bencode
+
 from .constants import PENDING_INFO_HASHES
 
 
