@@ -18,6 +18,8 @@ import sqlite3
 import time
 import typing
 
+import humanfriendly
+
 from . import bencode
 from .constants import PENDING_INFO_HASHES
 
@@ -136,7 +138,8 @@ class Database:
     def close(self) -> None:
         if self.__pending_metadata:
             self.__commit_metadata()
-        speed = self.total_metadata_commited / (time.clock() - self.start_time)
-        logging.info("Saved %d metadata record in session. Average speed %0.2f metadata / s." %
-                     (self.total_metadata_commited, speed))
+        duration = (time.clock() - self.start_time)
+        speed = self.total_metadata_commited / duration
+        logging.info("Saved %d metadata in session %s long. Average speed was %0.2f metadata / s." %
+                     (self.total_metadata_commited, humanfriendly.format_timespan(duration), speed))
         self.__db_conn.close()
