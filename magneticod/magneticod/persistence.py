@@ -38,7 +38,6 @@ class Database:
         os.makedirs(os.path.split(database)[0], exist_ok=True)
         db_conn = sqlite3.connect(database, isolation_level=None)
 
-        db_conn.execute("PRAGMA journal_mode=WAL;")
         db_conn.execute("PRAGMA temp_store = 2;")
         db_conn.execute("PRAGMA foreign_keys=ON;")
 
