@@ -17,6 +17,7 @@ import functools
 from datetime import datetime
 import logging
 import sqlite3
+import time
 import os
 
 import appdirs
@@ -206,6 +207,29 @@ def torrent(**kwargs):
     return flask.render_template("torrent.html", **context)
 
 
+@app.route("/statistics")
+@requires_auth
+def statistics():
+    with magneticod_db:
+        now = int(time.time())
+        # Retrieve all the torrents discovered in the past 30 days (30 days * 24 hours * 60 minutes * 60 seconds...)
+        # Also, see http://www.sqlite.org/lang_datefunc.html for details of `date()`.
+        #     Function          Equivalent strftime()
+        #     date(...) 		strftime('%Y-%m-%d', ...)
+        cur = magneticod_db.execute(
+            "SELECT date(discovered_on, 'unixepoch') AS day, count() FROM torrents WHERE discovered_on >= ? "
+            "GROUP BY day;",
+            (now - 30 * 24 * 60 * 60, )
+        )
+        results = cur.fetchall()  # for instance, [('2017-04-01', 17428), ('2017-04-02', 28342)]
+
+    return flask.render_template("statistics.html", **{
+        # We directly substitute them in the JavaScript code.
+        "dates": str([t[0] for t in results]),
+        "amounts": str([t[1] for t in results])
+    })
+
+
 def initialize_magneticod_db() -> None:
     global magneticod_db
 
@@ -216,7 +240,6 @@ def initialize_magneticod_db() -> None:
 
     with magneticod_db:
         magneticod_db.execute("PRAGMA journal_mode=WAL;")
-        magneticod_db.execute("PRAGMA temp_store=2;")
 
         magneticod_db.execute("CREATE VIRTUAL TABLE temp.fts_torrents USING fts4(name);")
         magneticod_db.execute("INSERT INTO fts_torrents (docid, name) SELECT id, name FROM torrents;")

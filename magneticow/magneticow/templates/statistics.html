@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Statistics - magneticow</title>
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/reset.css') }} ">
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/essential.css') }} ">
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/statistics.css') }} ">
+    <script defer src=" {{ url_for('static', filename='scripts/plotly-v1.26.1.min.js') }} "></script>
+    <script defer src=" {{ url_for('static', filename='scripts/statistics.js') }} "></script>
+</head>
+<body>
+<header>
+    <script>
+        var discoveryRateData = [{
+            x: {{ dates | safe }},
+            y: {{ amounts | safe }},
+            mode: "lines+markers"
+        }];
+    </script>
+
+    <div><a href="/"><b>magnetico<sup>w</sup></b></a>&#8203;<sub>(pre-alpha)</sub></div>
+</header>
+
+<main>
+    <div id="discoveryRateGraph"></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,21 @@
+header {
+    padding-bottom: 0.833em;
+    border-bottom: 1px solid;
+    margin-bottom: 0.833em;
+}
+
+
+header a {
+    text-decoration: none;
+    color: inherit;
+}
+
+
+#discoveryRateGraph {
+    width: calc(540px * 1.618);
+    height: 540px;
+    margin-left: auto;
+    margin-right: auto;
+    border-style: solid;
+    border-width: 1px;
+}
