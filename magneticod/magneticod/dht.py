@@ -22,7 +22,7 @@ import socket
 import typing
 import os
 
-from .constants import BOOTSTRAPPING_NODES, DEFAULT_MAX_METADATA_SIZE, MAX_ACTIVE_PEERS_PER_INFO_HASH
+from .constants import BOOTSTRAPPING_NODES, DEFAULT_MAX_METADATA_SIZE, MAX_ACTIVE_PEERS_PER_INFO_HASH, PEER_TIMEOUT
 from . import bencode
 from . import bittorrent
 
@@ -102,7 +102,7 @@ class SybilNode:
 
     def shutdown(self) -> None:
         for peer in itertools.chain.from_iterable(self.__peers.values()):
-            peer.close()
+            peer.cancel()
         self._transport.close()
 
     def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:
@@ -182,18 +182,21 @@ class SybilNode:
            info_hash in self._complete_info_hashes:
             return
 
-        peer = bittorrent.fetch_metadata(info_hash, peer_addr, self.__max_metadata_size)
+        peer = self._loop.create_task(self._launch_fetch(info_hash, peer_addr))
         self.__peers[info_hash].append(peer)
-        self._loop.create_task(peer).add_done_callback(self.metadata_found)
 
-    def metadata_found(self, future):
-        r = future.result()
-        if r:
-            info_hash, metadata = r
-            for peer in self.__peers[info_hash]:
-                peer.close()
-            self._metadata_q.put_nowait(r)
-            self._complete_info_hashes.add(info_hash)
+    async def _launch_fetch(self, info_hash, peer_addr):
+        try:
+            f = bittorrent.fetch_metadata(info_hash, peer_addr, self.__max_metadata_size)
+            r = await asyncio.wait_for(f, timeout=PEER_TIMEOUT)
+            if r:
+                info_hash, metadata = r
+                for peer in self.__peers[info_hash]:
+                    peer.cancel()
+                self._complete_info_hashes.add(info_hash)
+                await self._metadata_q.put(r)
+        except asyncio.TimeoutError:
+            pass
 
     def __bootstrap(self) -> None:
         for addr in BOOTSTRAPPING_NODES:
