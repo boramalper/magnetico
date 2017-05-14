@@ -81,7 +81,7 @@ class DisposablePeer:
                 message = await self._reader.readexactly(length)
                 self.__on_message(message)
         except Exception as ex:
-            logging.info("closing %s to %s", self.__info_hash.hex(), self.__peer_addr)
+            logging.debug("closing %s to %s", self.__info_hash.hex(), self.__peer_addr)
             if not self._metadata_future.done():
                 self._metadata_future.set_result(None)
         if self._writer:
