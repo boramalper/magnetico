@@ -52,6 +52,7 @@ class DisposablePeer:
 
         self._metadata_future = loop.create_future()
         self._writer = None
+        self._is_paused = False
 
         try:
             self._reader, self._writer = await asyncio.open_connection(
@@ -87,6 +88,12 @@ class DisposablePeer:
         if self._writer:
             self._writer.close()
         return self._metadata_future.result()
+
+    def pause_writing(self):
+        self._is_paused = True
+
+    def resume_writing(self):
+        self._is_paused = False
 
     def __on_message(self, message: bytes) -> None:
         length = len(message)

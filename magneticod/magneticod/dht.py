@@ -84,6 +84,9 @@ class SybilNode:
         if addr[1] == 0:
             return
 
+        if self._transport.is_closing():
+            return
+
         try:
             message = bencode.loads(data)
         except bencode.BencodeDecodingError:
