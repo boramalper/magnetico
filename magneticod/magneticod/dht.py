@@ -62,6 +62,9 @@ class SybilNode:
         self._tasks.append(self._loop.create_task(self.increase_neighbour_task()))
         self._transport = transport
 
+    def connection_lost(self, exc):
+        self._is_paused = True
+
     def pause_writing(self):
         self._is_paused = True
 

@@ -61,7 +61,7 @@ def main():
         database.close()
         watch_q_task.cancel()
         loop.run_until_complete(node.shutdown())
-        loop.run_until_complete(watch_q_task)
+        loop.run_until_complete(asyncio.wait([watch_q_task]))
 
     return 0
 
