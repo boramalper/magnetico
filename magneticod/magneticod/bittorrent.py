@@ -49,11 +49,13 @@ class DisposablePeer:
         self.__metadata_received = 0  # Amount of metadata bytes received...
         self.__metadata = None
         self._writer = None
+        self._run_task = None
 
     def launch(self, loop):
         self._loop = loop
         self._metadata_future = self._loop.create_future()
-        self._loop.create_task(self.run())
+        self._run_task = self._loop.create_task(self.run())
+        self._loop.create_task(self.timeout())
         return self._metadata_future
 
     async def timeout(self):
@@ -65,8 +67,6 @@ class DisposablePeer:
         try:
             self._reader, self._writer = await asyncio.open_connection(
                 self.__peer_addr[0], self.__peer_addr[1], loop=self._loop)
-            self._loop.create_task(self.timeout())
-
             # Send the BitTorrent handshake message (0x13 = 19 in decimal, the length of the handshake message)
             self._writer.write(b"\x13BitTorrent protocol%s%s%s" % (
                 b"\x00\x00\x00\x00\x00\x10\x00\x01",
@@ -102,6 +102,8 @@ class DisposablePeer:
             self._metadata_future.set_result(None)
         if self._writer:
             self._writer.close()
+        if self._run_task:
+            self._run_task.cancel()
 
     def __on_message(self, message: bytes) -> None:
         length = len(message)
@@ -218,8 +220,9 @@ class DisposablePeer:
 
             if self.__metadata_received == self.__metadata_size:
                 if hashlib.sha1(self.__metadata).digest() == self.__info_hash:
-                    self._metadata_future.set_result((self.__info_hash, bytes(self.__metadata)))
-                    self.close()
+                    if not self._metadata_future.done():
+                        self._metadata_future.set_result((self.__info_hash, bytes(self.__metadata)))
+                        self.close()
                 else:
                     logging.debug("Invalid Metadata! Ignoring.")
 
