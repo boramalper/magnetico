@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
-import array
 import asyncio
 import collections
 import itertools
@@ -22,7 +21,7 @@ import socket
 import typing
 import os
 
-from .constants import BOOTSTRAPPING_NODES, DEFAULT_MAX_METADATA_SIZE, MAX_ACTIVE_PEERS_PER_INFO_HASH, PEER_TIMEOUT
+from .constants import BOOTSTRAPPING_NODES, MAX_ACTIVE_PEERS_PER_INFO_HASH, PEER_TIMEOUT
 from . import bencode
 from . import bittorrent
 
@@ -49,6 +48,7 @@ class SybilNode:
         self._complete_info_hashes = complete_info_hashes
         self.__max_metadata_size = max_metadata_size
         self._metadata_q = asyncio.Queue()
+        self._tasks = []
 
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
@@ -57,8 +57,8 @@ class SybilNode:
         await loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
 
     def connection_made(self, transport):
-        self._loop.create_task(self.on_tick())
-        self._loop.create_task(self.increase_neighbour_task())
+        self._tasks.append(self._loop.create_task(self.on_tick()))
+        self._tasks.append(self._loop.create_task(self.increase_neighbour_task()))
         self._transport = transport
 
     def error_received(self, exc):
@@ -74,7 +74,8 @@ class SybilNode:
     async def on_tick(self) -> None:
         while True:
             await asyncio.sleep(1)
-            self.__bootstrap()
+            if len(self._routing_table) == 0:
+                self.__bootstrap()
             self.__make_neighbours()
             self._routing_table.clear()
 
@@ -100,9 +101,16 @@ class SybilNode:
             await asyncio.sleep(10)
             self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
 
-    def shutdown(self) -> None:
-        for peer in itertools.chain.from_iterable(self.__peers.values()):
+    async def shutdown(self) -> None:
+        peers = [peer for peer in itertools.chain.from_iterable(self.__peers.values())]
+        for peer in peers:
             peer.cancel()
+        for peer in peers:
+            await peer
+        for task in self._tasks:
+            task.cancel()
+        for task in self._tasks:
+            await task
         self._transport.close()
 
     def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:

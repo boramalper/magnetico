@@ -20,7 +20,6 @@ import typing
 import os
 
 from . import bencode
-from .constants import DEFAULT_MAX_METADATA_SIZE
 
 InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
@@ -36,8 +35,7 @@ class ProtocolError(Exception):
 
 
 class DisposablePeer:
-    async def run(self, loop, info_hash: InfoHash, peer_addr: PeerAddress,
-                  max_metadata_size: int=DEFAULT_MAX_METADATA_SIZE):
+    async def run(self, loop, info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int):
         self.__peer_addr = peer_addr
         self.__info_hash = info_hash
 

@@ -57,10 +57,9 @@ def main():
         loop.run_forever()
     except KeyboardInterrupt:
         logging.critical("Keyboard interrupt received! Exiting gracefully...")
-        pass
     finally:
         database.close()
-        node.shutdown()
+        loop.run_until_complete(node.shutdown())
 
     return 0
 
