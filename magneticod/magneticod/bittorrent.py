@@ -12,11 +12,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
-import errno
+import asyncio
 import logging
 import hashlib
 import math
-import socket
 import typing
 import os
 
@@ -27,26 +26,19 @@ InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
 
 
+async def get_torrent_data(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size):
+    loop = asyncio.get_event_loop()
+    peer = DisposablePeer(info_hash, peer_addr, max_metadata_size)
+    r = await peer.launch(loop)
+    return r
+
+
 class DisposablePeer:
     def __init__(self, info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int= DEFAULT_MAX_METADATA_SIZE):
-        self.__socket = socket.socket()
-        self.__socket.setblocking(False)
-        # To reduce the latency:
-        self.__socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
-        if hasattr(socket, "TCP_QUICKACK"):
-            self.__socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, True)
-
-        res = self.__socket.connect_ex(peer_addr)
-        if res != errno.EINPROGRESS:
-            raise ConnectionError()
-
         self.__peer_addr = peer_addr
         self.__info_hash = info_hash
 
         self.__max_metadata_size = max_metadata_size
-
-        self.__incoming_buffer = bytearray()
-        self.__outgoing_buffer = bytearray()
 
         self.__bt_handshake_complete = False  # BitTorrent Handshake
         self.__ext_handshake_complete = False  # Extension Handshake
@@ -56,102 +48,55 @@ class DisposablePeer:
         self.__metadata_received = 0  # Amount of metadata bytes received...
         self.__metadata = None
 
-        # To prevent double shutdown
-        self.__shutdown = False
-
         # After 120 ticks passed, a peer should report an error and shut itself down due to being stall.
         self.__ticks_passed = 0
 
+    async def launch(self, loop):
+        self._loop = loop
+        self._metadata_future = self._loop.create_future()
+
+        self._reader, self._writer = await asyncio.open_connection(
+            self.__peer_addr[0], self.__peer_addr[1], loop=loop)
+
         # Send the BitTorrent handshake message (0x13 = 19 in decimal, the length of the handshake message)
-        self.__outgoing_buffer += b"\x13BitTorrent protocol%s%s%s" % (
+        self._writer.write(b"\x13BitTorrent protocol%s%s%s" % (
             b"\x00\x00\x00\x00\x00\x10\x00\x01",
             self.__info_hash,
             self.__random_bytes(20)
-        )
-
-    @staticmethod
-    def when_error() -> None:
-        raise NotImplementedError()
-
-    @staticmethod
-    def when_metadata_found(info_hash: InfoHash, metadata: bytes) -> None:
-        raise NotImplementedError()
-
-    def on_tick(self):
-        self.__ticks_passed += 1
-
-        if self.__ticks_passed == 120:
-            logging.debug("Peer failed to fetch metadata in time for info hash %s!", self.__info_hash.hex())
-            self.when_error()
-
-    def on_receivable(self) -> None:
-        while True:
-            try:
-                received = self.__socket.recv(8192)
-            except BlockingIOError:
-                break
-            except ConnectionResetError:
-                self.when_error()
-                return
-            except ConnectionRefusedError:
-                self.when_error()
-                return
-            except OSError:  # TODO: check for "no route to host 113" error
-                self.when_error()
-                return
-
-            if not received:
-                self.when_error()
-                return
-
-            self.__incoming_buffer += received
+        ))
         # Honestly speaking, BitTorrent protocol might be one of the most poorly documented and (not the most but) badly
         # designed protocols I have ever seen (I am 19 years old so what I could have seen?).
         #
         # Anyway, all the messages EXCEPT the handshake are length-prefixed by 4 bytes in network order, BUT the
         # size of the handshake message is the 1-byte length prefix + 49 bytes, but luckily, there is only one canonical
         # way of handshaking in the wild.
-        if not self.__bt_handshake_complete:
-            if len(self.__incoming_buffer) < 68:
-                # We are still receiving the handshake...
-                return
+        message = await self._reader.readexactly(68)
+        if message[1:20] != b"BitTorrent protocol":
+            # Erroneous handshake, possibly unknown version...
+            logging.debug("Erroneous BitTorrent handshake!  %s", message)
+            self.close()
+            return
 
-            if self.__incoming_buffer[1:20] != b"BitTorrent protocol":
-                # Erroneous handshake, possibly unknown version...
-                logging.debug("Erroneous BitTorrent handshake!  %s", self.__incoming_buffer[:68])
-                self.when_error()
-                return
+        self.__on_bt_handshake(message)
 
-            self.__on_bt_handshake(self.__incoming_buffer[:68])
+        try:
+            while not self._metadata_future.done():
+                buffer = await self._reader.readexactly(4)
+                length = int.from_bytes(buffer, "big")
+                message = await self._reader.readexactly(length)
+                self.__on_message(message)
+        except Exception as ex:
+            self.close()
+        return await self._metadata_future
 
-            self.__bt_handshake_complete = True
-            self.__incoming_buffer = self.__incoming_buffer[68:]
+    def when_metadata_found(self, info_hash: InfoHash, metadata: bytes) -> None:
+        self._metadata_future.set_result((info_hash, metadata))
+        self.close()
 
-        while len(self.__incoming_buffer) >= 4:
-            # Beware that while there are still messages in the incoming queue/buffer, one of previous messages might
-            # have caused an error that necessitates us to quit.
-            if self.__shutdown:
-                break
-
-            length = int.from_bytes(self.__incoming_buffer[:4], "big")
-            if len(self.__incoming_buffer) - 4 < length:
-                # Message is still incoming...
-                return
-
-            self.__on_message(self.__incoming_buffer[4:4+length])
-            self.__incoming_buffer = self.__incoming_buffer[4+length:]
-
-    def on_sendable(self) -> None:
-        while self.__outgoing_buffer:
-            try:
-                n_sent = self.__socket.send(self.__outgoing_buffer)
-                assert n_sent
-                self.__outgoing_buffer = self.__outgoing_buffer[n_sent:]
-            except BlockingIOError:
-                break
-            except OSError:
-                # In case -while looping- on_sendable is called after socket is closed (mostly because of an error)
-                return
+    def close(self):
+        self._writer.close()
+        if not self._metadata_future.done():
+            self._metadata_future.set_result(None)
 
     def __on_message(self, message: bytes) -> None:
         length = len(message)
@@ -191,10 +136,10 @@ class DisposablePeer:
         # In case you cannot read_file hex:
         #   0x14 = 20  (BitTorrent ID indicating that it's an extended message)
         #   0x00 =  0  (Extension ID indicating that it's the handshake message)
-        self.__outgoing_buffer += b"%s\x14\x00%s" % (
+        self._writer.write(b"%b\x14%s" % (
             (2 + len(msg_dict_dump)).to_bytes(4, "big"),
-            msg_dict_dump
-        )
+            b'\0' + msg_dict_dump
+        ))
 
     def __on_ext_handshake_message(self, message: bytes) -> None:
         if self.__ext_handshake_complete:
@@ -284,29 +229,11 @@ class DisposablePeer:
         # In case you cannot read_file hex:
         #   0x14 = 20  (BitTorrent ID indicating that it's an extended message)
         #   0x03 =  3  (Extension ID indicating that it's an ut_metadata message)
-        self.__outgoing_buffer += b"%b\x14%s%s" % (
+        self._writer.write(b"%b\x14%s%s" % (
             (2 + len(msg_dict_dump)).to_bytes(4, "big"),
             self.__ut_metadata.to_bytes(1, "big"),
             msg_dict_dump
-        )
-
-    def shutdown(self) -> None:
-        if self.__shutdown:
-            return
-        try:
-            self.__socket.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            # OSError might be raised in case the connection to the remote peer fails: nevertheless, when_error should
-            # be called, and the supervisor will try to shutdown the peer, and ta da: OSError!
-            pass
-        self.__socket.close()
-        self.__shutdown = True
-
-    def would_send(self) -> bool:
-        return bool(len(self.__outgoing_buffer))
-
-    def fileno(self) -> int:
-        return self.__socket.fileno()
+        ))
 
     @staticmethod
     def __random_bytes(n: int) -> bytes:
