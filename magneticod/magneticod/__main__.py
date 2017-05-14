@@ -51,7 +51,7 @@ def main():
     node = dht.SybilNode(arguments.node_addr, complete_info_hashes, arguments.max_metadata_size)
     loop.run_until_complete(node.launch(loop))
 
-    loop.create_task(watch_q(database, node._metadata_q))
+    watch_q_task = loop.create_task(watch_q(database, node._metadata_q))
 
     try:
         loop.run_forever()
@@ -59,7 +59,9 @@ def main():
         logging.critical("Keyboard interrupt received! Exiting gracefully...")
     finally:
         database.close()
+        watch_q_task.cancel()
         loop.run_until_complete(node.shutdown())
+        loop.run_until_complete(watch_q_task)
 
     return 0
 

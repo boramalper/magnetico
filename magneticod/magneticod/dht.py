@@ -105,15 +105,11 @@ class SybilNode:
             self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
 
     async def shutdown(self) -> None:
-        peers = [peer for peer in itertools.chain.from_iterable(self.__peers.values())]
-        for peer in peers:
-            peer.cancel()
-        for peer in peers:
-            await peer
-        for task in self._tasks:
-            task.cancel()
-        for task in self._tasks:
-            await task
+        futures = [peer for peer in itertools.chain.from_iterable(self.__peers.values())]
+        futures.extend(self._tasks)
+        for future in futures:
+            future.cancel()
+        await asyncio.wait(futures)
         self._transport.close()
 
     def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:
