@@ -192,8 +192,8 @@ class SybilNode:
             info_hash, metadata = r
             for peer in self.__peers[info_hash]:
                 peer.close()
-        self._metadata_q.put_nowait(r)
-        self._complete_info_hashes.add(info_hash)
+            self._metadata_q.put_nowait(r)
+            self._complete_info_hashes.add(info_hash)
 
     def __bootstrap(self) -> None:
         for addr in BOOTSTRAPPING_NODES:
