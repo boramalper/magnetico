@@ -26,7 +26,7 @@ InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
 
 
-async def get_torrent_data(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size):
+async def fetch_metadata(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size):
     loop = asyncio.get_event_loop()
     peer = DisposablePeer(info_hash, peer_addr, max_metadata_size)
     r = await peer.launch(loop)

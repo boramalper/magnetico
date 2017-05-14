@@ -182,7 +182,7 @@ class SybilNode:
            info_hash in self._complete_info_hashes:
             return
 
-        peer = bittorrent.get_torrent_data(info_hash, peer_addr, self.__max_metadata_size)
+        peer = bittorrent.fetch_metadata(info_hash, peer_addr, self.__max_metadata_size)
         self.__peers[info_hash].append(peer)
         self._loop.create_task(peer).add_done_callback(self.metadata_found)
 
