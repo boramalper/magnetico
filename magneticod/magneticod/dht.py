@@ -48,8 +48,8 @@ class SybilNode:
         self._complete_info_hashes = complete_info_hashes
         self.__max_metadata_size = max_metadata_size
         self._metadata_q = asyncio.Queue()
-        self._tasks = []
         self._is_paused = False
+        self._tick_task = None
 
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
@@ -58,8 +58,7 @@ class SybilNode:
         await loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
 
     def connection_made(self, transport):
-        self._tasks.append(self._loop.create_task(self.on_tick()))
-        self._tasks.append(self._loop.create_task(self.increase_neighbour_task()))
+        self._tick_task = self._loop.create_task(self.on_tick())
         self._transport = transport
 
     def connection_lost(self, exc):
@@ -93,6 +92,8 @@ class SybilNode:
                 self.__bootstrap()
             self.__make_neighbours()
             self._routing_table.clear()
+            if not self._is_paused:
+                self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
 
     def datagram_received(self, data, addr) -> None:
         # Ignore nodes that uses port 0 (assholes).
@@ -114,14 +115,10 @@ class SybilNode:
         elif message.get(b"q") == b"announce_peer":
             self.__on_ANNOUNCE_PEER_query(message, addr)
 
-    async def increase_neighbour_task(self):
-        while True:
-            await asyncio.sleep(10)
-            self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
-
     async def shutdown(self) -> None:
         futures = [peer for peer in itertools.chain.from_iterable(self.__peers.values())]
-        futures.extend(self._tasks)
+        if self._tick_task:
+            futures.append(self._tick_task)
         for future in futures:
             future.cancel()
         await asyncio.wait(futures)
