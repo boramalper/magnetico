@@ -37,6 +37,14 @@ def main():
     logging.basicConfig(level=arguments.loglevel, format="%(asctime)s  %(levelname)-8s  %(message)s")
     logging.info("magneticod v%d.%d.%d started", *__version__)
 
+    # use uvloop if it's installed
+    try:
+        import uvloop
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        logging.info("using uvloop")
+    except ModuleNotFoundError:
+        pass
+
     # noinspection PyBroadException
     try:
         path = arguments.database_file
