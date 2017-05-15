@@ -89,7 +89,7 @@ class SybilNode:
         while True:
             await asyncio.sleep(1)
             if len(self._routing_table) == 0:
-                self.__bootstrap()
+                await self.__bootstrap()
             self.__make_neighbours()
             self._routing_table.clear()
             if not self._is_paused:
@@ -217,10 +217,16 @@ class SybilNode:
         except asyncio.TimeoutError:
             pass
 
-    def __bootstrap(self) -> None:
-        for addr in BOOTSTRAPPING_NODES:
-            data = self.__build_FIND_NODE_query(self.__true_id)
-            self.sendto(data, addr)
+    async def __bootstrap(self) -> None:
+        for node in BOOTSTRAPPING_NODES:
+            try:
+                # AF_INET means ip4 only
+                responses = await self._loop.getaddrinfo(*node, family=socket.AF_INET)
+                for (family, type, proto, canonname, sockaddr) in responses:
+                    data = self.__build_FIND_NODE_query(self.__true_id)
+                    self.sendto(data, sockaddr)
+            except Exception:
+                logging.exception("bootstrap problem")
 
     def __make_neighbours(self) -> None:
         for node_id, addr in self._routing_table.items():
