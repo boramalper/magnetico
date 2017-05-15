@@ -74,8 +74,9 @@ def requires_auth(f):
 @requires_auth
 def home_page():
     with magneticod_db:
+        # COUNT(ROWID) is much more inefficient since it scans the whole table, so use MAX(ROWID)
         cur = magneticod_db.execute("SELECT MAX(ROWID) FROM torrents ;")
-        n_torrents = cur.fetchone()[0]
+        n_torrents = cur.fetchone()[0] or 0
 
     return flask.render_template("homepage.html", n_torrents=n_torrents)
 
