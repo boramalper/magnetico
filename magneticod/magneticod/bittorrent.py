@@ -25,9 +25,17 @@ InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
 
 
-async def fetch_metadata(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size):
-    return await DisposablePeer().run(
-        asyncio.get_event_loop(), info_hash, peer_addr, max_metadata_size)
+async def fetch_metadata(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size, timeout=None):
+    loop = asyncio.get_event_loop()
+    task = asyncio.ensure_future(DisposablePeer().run(
+        asyncio.get_event_loop(), info_hash, peer_addr, max_metadata_size))
+    h = None
+    if timeout is not None:
+        h = loop.call_later(timeout, lambda: task.cancel())
+    try:
+        return await task
+    except asyncio.CancelledError:
+        return None
 
 
 class ProtocolError(Exception):
@@ -80,12 +88,13 @@ class DisposablePeer:
                 length = int.from_bytes(buffer, "big")
                 message = await self._reader.readexactly(length)
                 self.__on_message(message)
-        except Exception as ex:
+        except Exception:
             logging.debug("closing %s to %s", self.__info_hash.hex(), self.__peer_addr)
+        finally:
             if not self._metadata_future.done():
                 self._metadata_future.set_result(None)
-        if self._writer:
-            self._writer.close()
+            if self._writer:
+                self._writer.close()
         return self._metadata_future.result()
 
     def __on_message(self, message: bytes) -> None:
@@ -199,7 +208,7 @@ class DisposablePeer:
             if self.__metadata_received == self.__metadata_size:
                 if hashlib.sha1(self.__metadata).digest() == self.__info_hash:
                     if not self._metadata_future.done():
-                        self._metadata_future.set_result((self.__info_hash, bytes(self.__metadata)))
+                        self._metadata_future.set_result(bytes(self.__metadata))
                 else:
                     logging.debug("Invalid Metadata! Ignoring.")
 
