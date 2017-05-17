@@ -33,9 +33,9 @@ class Database:
         self.__pending_metadata = []  # type: typing.List[typing.Tuple[bytes, str, int, int]]
         # list of tuple (info_hash, size, path)
         self.__pending_files = []  # type: typing.List[typing.Tuple[bytes, int, bytes]]
-        self.last_commit_time = time.clock()
+        self.last_commit_time = time.monotonic()
         self.total_metadata_commited = 0
-        self.start_time = time.clock()
+        self.start_time = time.monotonic()
 
     @staticmethod
     def __connect(database) -> sqlite3.Connection:
@@ -121,7 +121,7 @@ class Database:
                 self.__pending_files
             )
             cur.execute("COMMIT;")
-            speed = len(self.__pending_metadata) / (time.clock() - self.last_commit_time)
+            speed = len(self.__pending_metadata) / (time.monotonic() - self.last_commit_time)
             logging.info("%d metadata (%d files) are committed to the database Speed is %0.2f metadata / s.",
                          len(self.__pending_metadata), len(self.__pending_files), speed)
             self.total_metadata_commited += len(self.__pending_metadata)
@@ -132,13 +132,13 @@ class Database:
             logging.exception("Could NOT commit metadata to the database! (%d metadata are pending)",
                               len(self.__pending_metadata))
         finally:
-            self.last_commit_time = time.clock()
+            self.last_commit_time = time.monotonic()
             cur.close()
 
     def close(self) -> None:
         if self.__pending_metadata:
             self.__commit_metadata()
-        duration = (time.clock() - self.start_time)
+        duration = (time.monotonic() - self.start_time)
         speed = self.total_metadata_commited / duration
         logging.info("Saved %d metadata in session %s long. Average speed was %0.2f metadata / s." %
                      (self.total_metadata_commited, humanfriendly.format_timespan(duration), speed))
