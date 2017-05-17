@@ -42,7 +42,7 @@ def main():
         import uvloop
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
         logging.info("using uvloop")
-    except ModuleNotFoundError:
+    except ImportError:
         pass
 
     # noinspection PyBroadException
