@@ -26,15 +26,10 @@ PeerAddress = typing.Tuple[str, int]
 
 
 async def fetch_metadata(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size, timeout=None):
-    loop = asyncio.get_event_loop()
-    task = asyncio.ensure_future(DisposablePeer().run(
-        asyncio.get_event_loop(), info_hash, peer_addr, max_metadata_size))
-    h = None
-    if timeout is not None:
-        h = loop.call_later(timeout, lambda: task.cancel())
     try:
-        return await task
-    except asyncio.CancelledError:
+        return await asyncio.wait_for(DisposablePeer().run(
+            asyncio.get_event_loop(), info_hash, peer_addr, max_metadata_size), timeout=timeout)
+    except asyncio.TimeoutError:
         return None
 
 

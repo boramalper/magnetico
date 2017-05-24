@@ -114,12 +114,11 @@ class SybilNode:
             self.__on_ANNOUNCE_PEER_query(message, addr)
 
     async def shutdown(self) -> None:
-        futures = list(self.__tasks.values())
-        if self._tick_task:
-            futures.append(self._tick_task)
-        for future in futures:
-            future.cancel()
-        await asyncio.wait(futures)
+        tasks = list(self.__tasks.values())
+        for t in tasks:
+            t.set_result(None)
+        self._tick_task.cancel()
+        await asyncio.wait([self._tick_task])
         self._transport.close()
 
     def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:
@@ -224,16 +223,21 @@ class SybilNode:
             metadata = child_task.result()
             if metadata and not parent_task.done():
                 parent_task.set_result(metadata)
+        except asyncio.CancelledError:
+            pass
         except Exception:
             logging.exception("child result is exception")
         if parent_task.child_count <= 0 and not parent_task.done():
             parent_task.set_result(None)
 
     def _parent_task_done(self, parent_task, info_hash):
-        metadata = parent_task.result()
-        if metadata:
-            self._complete_info_hashes.add(info_hash)
-            self._metadata_q.put_nowait((info_hash, metadata))
+        try:
+            metadata = parent_task.result()
+            if metadata:
+                self._complete_info_hashes.add(info_hash)
+                self._metadata_q.put_nowait((info_hash, metadata))
+        except asyncio.CancelledError:
+            pass
         del self.__tasks[info_hash]
 
     async def __bootstrap(self) -> None:
