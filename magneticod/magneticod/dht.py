@@ -31,7 +31,7 @@ InfoHash = bytes
 
 
 class SybilNode:
-    def __init__(self, address: typing.Tuple[str, int], complete_info_hashes, max_metadata_size):
+    def __init__(self, address: typing.Tuple[str, int], is_infohash_new, max_metadata_size):
         self.__true_id = self.__random_bytes(20)
 
         self.__address = address
@@ -43,7 +43,7 @@ class SybilNode:
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
         self.__tasks = {}  # type: typing.Dict[dht.InfoHash, asyncio.Future]
-        self._complete_info_hashes = complete_info_hashes
+        self._is_inforhash_new = is_infohash_new
         self.__max_metadata_size = max_metadata_size
         self._metadata_q = asyncio.Queue()
         self._is_paused = False
@@ -200,7 +200,7 @@ class SybilNode:
         else:
             peer_addr = (addr[0], port)
 
-        if info_hash in self._complete_info_hashes:
+        if not self._is_inforhash_new(info_hash):
             return
 
         # create the parent future
@@ -240,7 +240,6 @@ class SybilNode:
         try:
             metadata = parent_task.result()
             if metadata:
-                self._complete_info_hashes.add(info_hash)
                 self._metadata_q.put_nowait((info_hash, metadata))
         except asyncio.CancelledError:
             pass

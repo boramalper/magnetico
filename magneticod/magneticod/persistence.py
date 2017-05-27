@@ -94,11 +94,14 @@ class Database:
 
         return True
 
-    def get_complete_info_hashes(self) -> typing.Set[bytes]:
+    def is_infohash_new(self, info_hash):
+        if info_hash in [x[0] for x in self.__pending_metadata]:
+            return False
         cur = self.__db_conn.cursor()
         try:
-            cur.execute("SELECT info_hash FROM torrents;")
-            return set(x[0] for x in cur.fetchall())
+            cur.execute("SELECT count(info_hash) FROM torrents where info_hash = ?;", [info_hash])
+            x, = cur.fetchone()
+            return x == 0
         finally:
             cur.close()
 

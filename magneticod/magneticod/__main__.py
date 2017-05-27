@@ -56,7 +56,7 @@ def create_tasks():
     complete_info_hashes = database.get_complete_info_hashes()
 
     loop = asyncio.get_event_loop()
-    node = dht.SybilNode(arguments.node_addr, complete_info_hashes, arguments.max_metadata_size)
+    node = dht.SybilNode(arguments.node_addr, database.is_infohash_new, arguments.max_metadata_size)
     loop.create_task(node.launch(loop))
     watch_q_task = loop.create_task(watch_q(database, node.metadata_q()))
     watch_q_task.add_done_callback(lambda x: clean_up(loop, database, node))
