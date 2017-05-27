@@ -92,6 +92,9 @@ class SybilNode:
             self._routing_table.clear()
             if not self._is_paused:
                 self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
+            logging.debug("fetch metadata task count: %d", sum(
+                x.child_count for x in self.__tasks.values()))
+            logging.debug("asyncio task count: %d", len(asyncio.Task.all_tasks()))
 
     def datagram_received(self, data, addr) -> None:
         # Ignore nodes that uses port 0 (assholes).
