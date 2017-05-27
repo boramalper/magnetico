@@ -51,6 +51,9 @@ class SybilNode:
 
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
+    def metadata_q(self):
+        return self._metadata_q
+
     async def launch(self, loop):
         self._loop = loop
         await loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
