@@ -8,7 +8,7 @@ def read_file(path):
 
 setup(
     name="magneticow",
-    version="0.3.0",
+    version="0.4.0",
     description="Lightweight web interface for magnetico.",
     long_description=read_file("README.rst"),
     url="http://magnetico.org",
