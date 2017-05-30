@@ -14,10 +14,10 @@
 # <http://www.gnu.org/licenses/>.
 import collections
 import functools
+import datetime as dt
 from datetime import datetime
 import logging
 import sqlite3
-import time
 import os
 
 import appdirs
@@ -211,8 +211,17 @@ def torrent(**kwargs):
 @app.route("/statistics")
 @requires_auth
 def statistics():
+    # Ahhh...
+    # Time is hard, really. magneticod used time.time() to save when a torrent is discovered, unaware that none of the
+    # specifications say anything about the timezones (or their irrelevance to the UNIX time) and about leap seconds in
+    # a year.
+    # Nevertheless, we still use it. In future, before v1.0.0, we may change it as we wish, offering a migration
+    # solution for the current users. But in the meanwhile, be aware that all your calculations will be a bit lousy,
+    # though within tolerable limits for a torrent search engine.
+
     with magneticod_db:
-        now = int(time.time())
+        # latest_today is the latest UNIX timestamp of today, the very last second.
+        latest_today = int((dt.date.today() + dt.timedelta(days=1) - dt.timedelta(seconds=1)).strftime("%s"))
         # Retrieve all the torrents discovered in the past 30 days (30 days * 24 hours * 60 minutes * 60 seconds...)
         # Also, see http://www.sqlite.org/lang_datefunc.html for details of `date()`.
         #     Function          Equivalent strftime()
@@ -220,7 +229,7 @@ def statistics():
         cur = magneticod_db.execute(
             "SELECT date(discovered_on, 'unixepoch') AS day, count() FROM torrents WHERE discovered_on >= ? "
             "GROUP BY day;",
-            (now - 30 * 24 * 60 * 60, )
+            (latest_today - 30 * 24 * 60 * 60, )
         )
         results = cur.fetchall()  # for instance, [('2017-04-01', 17428), ('2017-04-02', 28342)]
 
