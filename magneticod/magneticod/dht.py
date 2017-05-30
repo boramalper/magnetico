@@ -12,16 +12,17 @@
 #
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
-import array
-import collections
+import asyncio
+import itertools
 import zlib
 import logging
 import socket
 import typing
 import os
 
-from .constants import BOOTSTRAPPING_NODES, DEFAULT_MAX_METADATA_SIZE
+from .constants import BOOTSTRAPPING_NODES, MAX_ACTIVE_PEERS_PER_INFO_HASH, PEER_TIMEOUT
 from . import bencode
+from . import bittorrent
 
 NodeID = bytes
 NodeAddress = typing.Tuple[str, int]
@@ -30,107 +31,95 @@ InfoHash = bytes
 
 
 class SybilNode:
-    def __init__(self, address: typing.Tuple[str, int]):
+    def __init__(self, address: typing.Tuple[str, int], complete_info_hashes, max_metadata_size):
         self.__true_id = self.__random_bytes(20)
 
-        self.__socket = socket.socket(type=socket.SOCK_DGRAM)
-        self.__socket.bind(address)
-        self.__socket.setblocking(False)
+        self.__address = address
 
-        self.__incoming_buffer = array.array("B", (0 for _ in range(65536)))
-        self.__outgoing_queue = collections.deque()
-
-        self.__routing_table = {}  # type: typing.Dict[NodeID, NodeAddress]
+        self._routing_table = {}  # type: typing.Dict[NodeID, NodeAddress]
 
         self.__token_secret = self.__random_bytes(4)
         # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
+        self.__tasks = {}  # type: typing.Dict[dht.InfoHash, asyncio.Future]
+        self._complete_info_hashes = complete_info_hashes
+        self.__max_metadata_size = max_metadata_size
+        self._metadata_q = asyncio.Queue()
+        self._is_paused = False
+        self._tick_task = None
 
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
-    @staticmethod
-    def when_peer_found(info_hash: InfoHash, peer_addr: PeerAddress) -> None:
-        raise NotImplementedError()
+    async def launch(self, loop):
+        self._loop = loop
+        await loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
 
-    def on_tick(self) -> None:
-        self.__bootstrap()
-        self.__make_neighbours()
-        self.__routing_table.clear()
+    def connection_made(self, transport):
+        self._tick_task = self._loop.create_task(self.on_tick())
+        self._transport = transport
 
-    def on_receivable(self) -> None:
-        buffer = self.__incoming_buffer
-        while True:
-            try:
-                _, addr = self.__socket.recvfrom_into(buffer, 65536)
-                data = buffer.tobytes()
-            except BlockingIOError:
-                break
-            except ConnectionResetError:
-                continue
-            except ConnectionRefusedError:
-                continue
+    def connection_lost(self, exc):
+        self._is_paused = True
 
-            # Ignore nodes that uses port 0 (assholes).
-            if addr[1] == 0:
-                continue
+    def pause_writing(self):
+        self._is_paused = True
 
-            try:
-                message = bencode.loads(data)
-            except bencode.BencodeDecodingError:
-                continue
+    def resume_writing(self):
+        self._is_paused = False
 
-            if isinstance(message.get(b"r"), dict) and type(message[b"r"].get(b"nodes")) is bytes:
-                self.__on_FIND_NODE_response(message)
-            elif message.get(b"q") == b"get_peers":
-                self.__on_GET_PEERS_query(message, addr)
-            elif message.get(b"q") == b"announce_peer":
-                self.__on_ANNOUNCE_PEER_query(message, addr)
+    def sendto(self, data, addr):
+        if self._is_paused:
+            return
+        self._transport.sendto(data, addr)
 
-    def on_sendable(self) -> None:
-        congestion = None
-        while True:
-            try:
-                addr, data = self.__outgoing_queue.pop()
-            except IndexError:
-                break
-
-            try:
-                self.__socket.sendto(data, addr)
-            except BlockingIOError:
-                self.__outgoing_queue.appendleft((addr, data))
-                break
-            except PermissionError:
-                # This exception (EPERM errno: 1) is kernel's way of saying that "you are far too fast, chill".
-                # It is also likely that we have received a ICMP source quench packet (meaning, that we really need to
-                # slow down.
-                #
-                # Read more here: http://www.archivum.info/comp.protocols.tcp-ip/2009-05/00088/UDP-socket-amp-amp-sendto
-                # -amp-amp-EPERM.html
-                congestion = True
-                break
-            except OSError:
-                # Pass in case of trying to send to port 0 (it is much faster to catch exceptions than using an
-                # if-statement).
-                pass
-
-        if congestion:
-            self.__outgoing_queue.clear()
+    def error_received(self, exc):
+        logging.error("got error %s", exc)
+        if isinstance(exc, PermissionError):
             # In case of congestion, decrease the maximum number of nodes to the 90% of the current value.
             if self.__n_max_neighbours < 200:
                 logging.warning("Maximum number of neighbours are now less than 200 due to congestion!")
             else:
                 self.__n_max_neighbours = self.__n_max_neighbours * 9 // 10
-        else:
-            # In case of the lack of congestion, increase the maximum number of nodes by 1%.
-            self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
+                logging.debug("Maximum number of neighbours now %d", self.__n_max_neighbours)
 
-    def would_send(self) -> bool:
-        """ Whether node is waiting to write on its socket or not. """
-        return bool(self.__outgoing_queue)
+    async def on_tick(self) -> None:
+        while True:
+            await asyncio.sleep(1)
+            if len(self._routing_table) == 0:
+                await self.__bootstrap()
+            self.__make_neighbours()
+            self._routing_table.clear()
+            if not self._is_paused:
+                self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
 
-    def shutdown(self) -> None:
-        self.__socket.close()
+    def datagram_received(self, data, addr) -> None:
+        # Ignore nodes that uses port 0 (assholes).
+        if addr[1] == 0:
+            return
+
+        if self._transport.is_closing():
+            return
+
+        try:
+            message = bencode.loads(data)
+        except bencode.BencodeDecodingError:
+            return
+
+        if isinstance(message.get(b"r"), dict) and type(message[b"r"].get(b"nodes")) is bytes:
+            self.__on_FIND_NODE_response(message)
+        elif message.get(b"q") == b"get_peers":
+            self.__on_GET_PEERS_query(message, addr)
+        elif message.get(b"q") == b"announce_peer":
+            self.__on_ANNOUNCE_PEER_query(message, addr)
+
+    async def shutdown(self) -> None:
+        tasks = list(self.__tasks.values())
+        for t in tasks:
+            t.set_result(None)
+        self._tick_task.cancel()
+        await asyncio.wait([self._tick_task])
+        self._transport.close()
 
     def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:
         try:
@@ -145,8 +134,8 @@ class SybilNode:
             return
 
         # Add new found nodes to the routing table, assuring that we have no more than n_max_neighbours in total.
-        if len(self.__routing_table) < self.__n_max_neighbours:
-            self.__routing_table.update(nodes)
+        if len(self._routing_table) < self.__n_max_neighbours:
+            self._routing_table.update(nodes)
 
     def __on_GET_PEERS_query(self, message: bencode.KRPCDict, addr: NodeAddress) -> None:
         try:
@@ -157,8 +146,7 @@ class SybilNode:
         except (TypeError, KeyError, AssertionError):
             return
 
-        # appendleft to prioritise GET_PEERS responses as they are the most fruitful ones!
-        self.__outgoing_queue.appendleft((addr, bencode.dumps({
+        data = bencode.dumps({
             b"y": b"r",
             b"t": transaction_id,
             b"r": {
@@ -166,7 +154,10 @@ class SybilNode:
                 b"nodes": b"",
                 b"token": self.__calculate_token(addr, info_hash)
             }
-        })))
+        })
+        # we want to prioritise GET_PEERS responses as they are the most fruitful ones!
+        # but there is no easy way to do this with asyncio
+        self.sendto(data, addr)
 
     def __on_ANNOUNCE_PEER_query(self, message: bencode.KRPCDict, addr: NodeAddress) -> None:
         try:
@@ -189,31 +180,80 @@ class SybilNode:
         except (TypeError, KeyError, AssertionError):
             return
 
-        self.__outgoing_queue.append((addr, bencode.dumps({
+        data = bencode.dumps({
             b"y": b"r",
             b"t": transaction_id,
             b"r": {
                 b"id": node_id[:15] + self.__true_id[:5]
             }
-        })))
+        })
+        self.sendto(data, addr)
 
         if implied_port:
             peer_addr = (addr[0], addr[1])
         else:
             peer_addr = (addr[0], port)
 
-        self.when_peer_found(info_hash, peer_addr)
+        if info_hash in self._complete_info_hashes:
+            return
 
-    def fileno(self) -> int:
-        return self.__socket.fileno()
+        # create the parent future
+        if info_hash not in self.__tasks:
+            parent_f = self._loop.create_future()
+            parent_f.child_count = 0
+            parent_f.add_done_callback(lambda f: self._parent_task_done(f, info_hash))
+            self.__tasks[info_hash] = parent_f
 
-    def __bootstrap(self) -> None:
-        for addr in BOOTSTRAPPING_NODES:
-            self.__outgoing_queue.append((addr, self.__build_FIND_NODE_query(self.__true_id)))
+        parent_f = self.__tasks[info_hash]
+
+        if parent_f.done():
+            return
+        if parent_f.child_count > MAX_ACTIVE_PEERS_PER_INFO_HASH:
+            return
+
+        task = asyncio.ensure_future(bittorrent.fetch_metadata(
+            info_hash, peer_addr, self.__max_metadata_size, timeout=PEER_TIMEOUT))
+        task.add_done_callback(lambda task: self._got_child_result(parent_f, task))
+        parent_f.child_count += 1
+        parent_f.add_done_callback(lambda f: task.cancel())
+
+    def _got_child_result(self, parent_task, child_task):
+        parent_task.child_count -= 1
+        try:
+            metadata = child_task.result()
+            if metadata and not parent_task.done():
+                parent_task.set_result(metadata)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logging.exception("child result is exception")
+        if parent_task.child_count <= 0 and not parent_task.done():
+            parent_task.set_result(None)
+
+    def _parent_task_done(self, parent_task, info_hash):
+        try:
+            metadata = parent_task.result()
+            if metadata:
+                self._complete_info_hashes.add(info_hash)
+                self._metadata_q.put_nowait((info_hash, metadata))
+        except asyncio.CancelledError:
+            pass
+        del self.__tasks[info_hash]
+
+    async def __bootstrap(self) -> None:
+        for node in BOOTSTRAPPING_NODES:
+            try:
+                # AF_INET means ip4 only
+                responses = await self._loop.getaddrinfo(*node, family=socket.AF_INET)
+                for (family, type, proto, canonname, sockaddr) in responses:
+                    data = self.__build_FIND_NODE_query(self.__true_id)
+                    self.sendto(data, sockaddr)
+            except Exception:
+                logging.exception("bootstrap problem")
 
     def __make_neighbours(self) -> None:
-        for node_id, addr in self.__routing_table.items():
-            self.__outgoing_queue.append((addr, self.__build_FIND_NODE_query(node_id[:15] + self.__true_id[:5])))
+        for node_id, addr in self._routing_table.items():
+            self.sendto(self.__build_FIND_NODE_query(node_id[:15] + self.__true_id[:5]), addr)
 
     @staticmethod
     def __decode_nodes(infos: bytes) -> typing.List[typing.Tuple[NodeID, NodeAddress]]:
