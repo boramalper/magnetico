@@ -41,12 +41,14 @@ from . import persistence
 #
 # If you are using a global variable, please always indicate that at the VERY BEGINNING of the function instead of right
 # before using the variable for the first time.
+from pybloom_live import ScalableBloomFilter
+
 selector = selectors.DefaultSelector()
 database = None  # type: persistence.Database
 node = None
 peers = collections.defaultdict(list)  # type: typing.DefaultDict[dht.InfoHash, typing.List[bittorrent.DisposablePeer]]
 # info hashes whose metadata is valid & complete (OR complete but deemed to be corrupt) so do NOT download them again:
-complete_info_hashes = set()
+complete_info_hashes = ScalableBloomFilter()
 
 
 def main():
@@ -65,7 +67,8 @@ def main():
         logging.exception("could NOT connect to the database!")
         return 1
 
-    complete_info_hashes = database.get_complete_info_hashes()
+    for info_hash in database.get_complete_info_hashes():
+        complete_info_hashes.add(info_hash)
 
     node = dht.SybilNode(arguments.node_addr)
 
