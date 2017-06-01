@@ -28,7 +28,6 @@ NodeAddress = typing.Tuple[str, int]
 PeerAddress = typing.Tuple[str, int]
 InfoHash = bytes
 
-
 class SybilNode:
     def __init__(self, address: typing.Tuple[str, int]):
         self.__true_id = self.__random_bytes(20)
@@ -38,7 +37,7 @@ class SybilNode:
         self.__socket.setblocking(False)
 
         self.__incoming_buffer = array.array("B", (0 for _ in range(65536)))
-        self.__outgoing_queue = collections.deque()
+        self.__outgoing_queue = collections.deque(maxlen=1000000)
 
         self.__routing_table = {}  # type: typing.Dict[NodeID, NodeAddress]
 
