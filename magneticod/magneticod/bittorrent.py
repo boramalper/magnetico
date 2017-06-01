@@ -85,6 +85,9 @@ class DisposablePeer:
             self.when_error()
 
     def on_receivable(self) -> None:
+        if self.__shutdown:
+            return
+
         while True:
             try:
                 received = self.__socket.recv(8192)
@@ -142,6 +145,9 @@ class DisposablePeer:
             self.__incoming_buffer = self.__incoming_buffer[4+length:]
 
     def on_sendable(self) -> None:
+        if self.__shutdown:
+            return
+
         while self.__outgoing_buffer:
             try:
                 n_sent = self.__socket.send(self.__outgoing_buffer)
