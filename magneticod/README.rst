@@ -12,12 +12,6 @@ Requirements
 ------------
 - Python 3.5 or above.
 
-    **WARNING:**
-
-    Python 3.6.0 and 3.6.1 suffer from a bug (`issue #29714 <http://bugs.python.org/issue29714>`_) that causes
-    magneticod to fail. As it is an interpreter bug that I have no control on, please make sure that you are not using
-    any of those Python 3 versions to run magneticod.
-
 - Decent Internet access (IPv4)
 
   **magneticod** uses UDP protocol to communicate with the nodes in the DHT network, and TCP to communicate with the
