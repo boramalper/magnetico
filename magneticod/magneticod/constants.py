@@ -6,6 +6,9 @@ BOOTSTRAPPING_NODES = [
 ]
 PENDING_INFO_HASHES = 10  # threshold for pending info hashes before being committed to database:
 
-TICK_INTERVAL = 1  # in seconds (soft constraint)
+TICK_INTERVAL = 1  # in seconds
+
  # maximum (inclusive) number of active (disposable) peers to fetch the metadata per info hash at the same time:
 MAX_ACTIVE_PEERS_PER_INFO_HASH = 5
+
+PEER_TIMEOUT=120 # seconds

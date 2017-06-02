@@ -13,49 +13,37 @@
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
 import argparse
-import collections
-import functools
+import asyncio
 import logging
 import ipaddress
-import selectors
 import textwrap
 import urllib.parse
-import itertools
 import os
 import sys
-import time
 import typing
 
 import appdirs
 import humanfriendly
 
-from .constants import TICK_INTERVAL, MAX_ACTIVE_PEERS_PER_INFO_HASH, DEFAULT_MAX_METADATA_SIZE
+from .constants import DEFAULT_MAX_METADATA_SIZE
 from . import __version__
-from . import bittorrent
 from . import dht
 from . import persistence
 
 
-# Global variables are bad bla bla bla, BUT these variables are used so many times that I think it is justified; else
-# the signatures of many functions are literally cluttered.
-#
-# If you are using a global variable, please always indicate that at the VERY BEGINNING of the function instead of right
-# before using the variable for the first time.
-selector = selectors.DefaultSelector()
-database = None  # type: persistence.Database
-node = None
-peers = collections.defaultdict(list)  # type: typing.DefaultDict[dht.InfoHash, typing.List[bittorrent.DisposablePeer]]
-# info hashes whose metadata is valid & complete (OR complete but deemed to be corrupt) so do NOT download them again:
-complete_info_hashes = set()
-
-
 def main():
-    global complete_info_hashes, database, node, peers, selector
-
     arguments = parse_cmdline_arguments()
 
     logging.basicConfig(level=arguments.loglevel, format="%(asctime)s  %(levelname)-8s  %(message)s")
     logging.info("magneticod v%d.%d.%d started", *__version__)
+
+    # use uvloop if it's installed
+    try:
+        import uvloop
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        logging.info("uvloop is being used")
+    except ImportError:
+        logging.exception("uvloop could not be imported, using the default asyncio implementation")
 
     # noinspection PyBroadException
     try:
@@ -67,106 +55,34 @@ def main():
 
     complete_info_hashes = database.get_complete_info_hashes()
 
-    node = dht.SybilNode(arguments.node_addr)
+    loop = asyncio.get_event_loop()
+    node = dht.SybilNode(arguments.node_addr, complete_info_hashes, arguments.max_metadata_size)
+    loop.run_until_complete(node.launch())
 
-    node.when_peer_found = lambda info_hash, peer_address: on_peer_found(info_hash=info_hash,
-                                                                         peer_address=peer_address,
-                                                                         max_metadata_size=arguments.max_metadata_size)
-
-    selector.register(node, selectors.EVENT_READ)
+    watch_q_task = loop.create_task(metadata_queue_watcher(database, node.__metadata_queue))
 
     try:
-        loop()
+        loop.run_forever()
     except KeyboardInterrupt:
         logging.critical("Keyboard interrupt received! Exiting gracefully...")
-        pass
     finally:
         database.close()
-        selector.close()
-        node.shutdown()
-        for peer in itertools.chain.from_iterable(peers.values()):
-            peer.shutdown()
+        watch_q_task.cancel()
+        loop.run_until_complete(node.shutdown())
+        loop.run_until_complete(asyncio.wait([watch_q_task]))
 
     return 0
 
 
-def on_peer_found(info_hash: dht.InfoHash, peer_address, max_metadata_size: int=DEFAULT_MAX_METADATA_SIZE) -> None:
-    global selector, peers, complete_info_hashes
-
-    if len(peers[info_hash]) > MAX_ACTIVE_PEERS_PER_INFO_HASH or info_hash in complete_info_hashes:
-        return
-
-    try:
-        peer = bittorrent.DisposablePeer(info_hash, peer_address, max_metadata_size)
-    except ConnectionError:
-        return
-
-    selector.register(peer, selectors.EVENT_READ | selectors.EVENT_WRITE)
-    peer.when_metadata_found = on_metadata_found
-    peer.when_error = functools.partial(on_peer_error, peer, info_hash)
-    peers[info_hash].append(peer)
-
-
-def on_metadata_found(info_hash: dht.InfoHash, metadata: bytes) -> None:
-    global complete_info_hashes, database, peers, selector
-
-    succeeded = database.add_metadata(info_hash, metadata)
-    if not succeeded:
-        logging.info("Corrupt metadata for %s! Ignoring.", info_hash.hex())
-
-    # When we fetch the metadata of an info hash completely, shut down all other peers who are trying to do the same.
-    for peer in peers[info_hash]:
-        selector.unregister(peer)
-        peer.shutdown()
-    del peers[info_hash]
-
-    complete_info_hashes.add(info_hash)
-
-
-def on_peer_error(peer: bittorrent.DisposablePeer, info_hash: dht.InfoHash) -> None:
-    global peers, selector
-    peer.shutdown()
-    peers[info_hash].remove(peer)
-    selector.unregister(peer)
-
-
-# TODO:
-# Consider whether time.monotonic() is a good choice. Maybe we should use CLOCK_MONOTONIC_RAW as its not affected by NTP
-# adjustments, and all we need is how many seconds passed since a certain point in time.
-def loop() -> None:
-    global selector, node, peers
-
-    t0 = time.monotonic()
+async def metadata_queue_watcher(database: persistence.Database, metadata_queue: asyncio.Queue) -> None:
+    """
+     Watches for the metadata queue to commit any complete info hashes to the database.
+    """
     while True:
-        keys_and_events = selector.select(timeout=TICK_INTERVAL)
-
-        # Check if it is time to tick
-        delta = time.monotonic() - t0
-        if delta >= TICK_INTERVAL:
-            if not (delta < 2 * TICK_INTERVAL):
-                logging.warning("Belated TICK! (Δ = %d)", delta)
-
-            node.on_tick()
-            for peer_list in peers.values():
-                for peer in peer_list:
-                    peer.on_tick()
-
-            t0 = time.monotonic()
-
-        for key, events in keys_and_events:
-            if events & selectors.EVENT_READ:
-                key.fileobj.on_receivable()
-            if events & selectors.EVENT_WRITE:
-                key.fileobj.on_sendable()
-
-        # Check for entities that would like to write to their socket
-        keymap = selector.get_map()
-        for fd in keymap:
-            fileobj = keymap[fd].fileobj
-            if fileobj.would_send():
-                selector.modify(fileobj, selectors.EVENT_READ | selectors.EVENT_WRITE)
-            else:
-                selector.modify(fileobj, selectors.EVENT_READ)
+        info_hash, metadata = await metadata_queue.get()
+        succeeded = database.add_metadata(info_hash, metadata)
+        if not succeeded:
+            logging.info("Corrupt metadata for %s! Ignoring.", info_hash.hex())
 
 
 def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
