@@ -41,9 +41,9 @@ def main():
     try:
         import uvloop
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-        logging.info("using uvloop")
+        logging.info("uvloop is being used")
     except ImportError:
-        pass
+        logging.exception("uvloop could not be imported, using the default asyncio implementation")
 
     # noinspection PyBroadException
     try:
@@ -57,9 +57,9 @@ def main():
 
     loop = asyncio.get_event_loop()
     node = dht.SybilNode(arguments.node_addr, complete_info_hashes, arguments.max_metadata_size)
-    loop.run_until_complete(node.launch(loop))
+    loop.run_until_complete(node.launch())
 
-    watch_q_task = loop.create_task(watch_q(database, node._metadata_q))
+    watch_q_task = loop.create_task(metadata_queue_watcher(database, node.__metadata_queue))
 
     try:
         loop.run_forever()
@@ -74,9 +74,12 @@ def main():
     return 0
 
 
-async def watch_q(database, q):
+async def metadata_queue_watcher(database: persistence.Database, metadata_queue: asyncio.Queue) -> None:
+    """
+     Watches for the metadata queue to commit any complete info hashes to the database.
+    """
     while True:
-        info_hash, metadata = await q.get()
+        info_hash, metadata = await metadata_queue.get()
         succeeded = database.add_metadata(info_hash, metadata)
         if not succeeded:
             logging.info("Corrupt metadata for %s! Ignoring.", info_hash.hex())

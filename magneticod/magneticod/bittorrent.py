@@ -25,10 +25,9 @@ InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
 
 
-async def fetch_metadata(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size, timeout=None):
+async def fetch_metadata_from_peer(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int, timeout=None):
     try:
-        return await asyncio.wait_for(DisposablePeer().run(
-            asyncio.get_event_loop(), info_hash, peer_addr, max_metadata_size), timeout=timeout)
+        return await asyncio.wait_for(DisposablePeer(info_hash, peer_addr, max_metadata_size).run(), timeout=timeout)
     except asyncio.TimeoutError:
         return None
 
@@ -38,39 +37,40 @@ class ProtocolError(Exception):
 
 
 class DisposablePeer:
-    async def run(self, loop, info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int):
+    def __init__(self, info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int) -> None:
         self.__peer_addr = peer_addr
         self.__info_hash = info_hash
 
-        self.__max_metadata_size = max_metadata_size
-
-        self.__bt_handshake_complete = False  # BitTorrent Handshake
         self.__ext_handshake_complete = False  # Extension Handshake
         self.__ut_metadata = None  # Since we don't know ut_metadata code that remote peer uses...
 
+        self.__max_metadata_size = max_metadata_size
         self.__metadata_size = None
         self.__metadata_received = 0  # Amount of metadata bytes received...
         self.__metadata = None
-        self._run_task = None
 
-        self._metadata_future = loop.create_future()
+        self._run_task = None
         self._writer = None
 
+
+    async def run(self):
+        event_loop = asyncio.get_event_loop()
+        self._metadata_future = event_loop.create_future()
+
         try:
-            self._reader, self._writer = await asyncio.open_connection(
-                self.__peer_addr[0], self.__peer_addr[1], loop=loop)
+            self._reader, self._writer = await asyncio.open_connection(*self.__peer_addr, loop=event_loop)
             # Send the BitTorrent handshake message (0x13 = 19 in decimal, the length of the handshake message)
             self._writer.write(b"\x13BitTorrent protocol%s%s%s" % (
                 b"\x00\x00\x00\x00\x00\x10\x00\x01",
                 self.__info_hash,
                 self.__random_bytes(20)
             ))
-            # Honestly speaking, BitTorrent protocol might be one of the most poorly documented and (not the most but) badly
-            # designed protocols I have ever seen (I am 19 years old so what I could have seen?).
+            # Honestly speaking, BitTorrent protocol might be one of the most poorly documented and (not the most but)
+            # badly designed protocols I have ever seen (I am 19 years old so what I could have seen?).
             #
             # Anyway, all the messages EXCEPT the handshake are length-prefixed by 4 bytes in network order, BUT the
-            # size of the handshake message is the 1-byte length prefix + 49 bytes, but luckily, there is only one canonical
-            # way of handshaking in the wild.
+            # size of the handshake message is the 1-byte length prefix + 49 bytes, but luckily, there is only one
+            # canonical way of handshaking in the wild.
             message = await self._reader.readexactly(68)
             if message[1:20] != b"BitTorrent protocol":
                 # Erroneous handshake, possibly unknown version...
@@ -93,12 +93,6 @@ class DisposablePeer:
         return self._metadata_future.result()
 
     def __on_message(self, message: bytes) -> None:
-        length = len(message)
-
-        if length < 2:
-            # An extension message has minimum length of 2.
-            return
-
         # Every extension message has BitTorrent Message ID = 20
         if message[0] != 20:
             # logging.debug("Message is NOT an EXTension message!  %s", message[:200])
@@ -127,7 +121,7 @@ class DisposablePeer:
                 b"ut_metadata": 1
             }
         })
-        # In case you cannot read_file hex:
+        # In case you cannot read hex:
         #   0x14 = 20  (BitTorrent ID indicating that it's an extended message)
         #   0x00 =  0  (Extension ID indicating that it's the handshake message)
         self._writer.write(b"%b\x14%s" % (

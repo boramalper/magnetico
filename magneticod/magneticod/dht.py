@@ -20,7 +20,7 @@ import socket
 import typing
 import os
 
-from .constants import BOOTSTRAPPING_NODES, MAX_ACTIVE_PEERS_PER_INFO_HASH, PEER_TIMEOUT
+from .constants import BOOTSTRAPPING_NODES, MAX_ACTIVE_PEERS_PER_INFO_HASH, PEER_TIMEOUT, TICK_INTERVAL
 from . import bencode
 from . import bittorrent
 
@@ -28,9 +28,10 @@ NodeID = bytes
 NodeAddress = typing.Tuple[str, int]
 PeerAddress = typing.Tuple[str, int]
 InfoHash = bytes
+Metadata = bytes
 
 
-class SybilNode:
+class SybilNode(asyncio.DatagramProtocol):
     def __init__(self, address: typing.Tuple[str, int], complete_info_hashes, max_metadata_size):
         self.__true_id = self.__random_bytes(20)
 
@@ -42,55 +43,69 @@ class SybilNode:
         # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
-        self.__tasks = {}  # type: typing.Dict[dht.InfoHash, asyncio.Future]
+        self.__parent_futures = {}  # type: typing.Dict[dht.InfoHash, asyncio.Future]
         self._complete_info_hashes = complete_info_hashes
         self.__max_metadata_size = max_metadata_size
-        self._metadata_q = asyncio.Queue()
-        self._is_paused = False
+        # Complete metadatas will be added to the queue, to be retrieved and committed to the database.
+        self.__metadata_queue = asyncio.Queue()  # typing.Collection[typing.Tuple[InfoHash, Metadata]]
+        self._is_writing_paused = False
         self._tick_task = None
 
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
-    async def launch(self, loop):
-        self._loop = loop
-        await loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
+    async def launch(self) -> None:
+        event_loop = asyncio.get_event_loop()
+        await event_loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
 
-    def connection_made(self, transport):
-        self._tick_task = self._loop.create_task(self.on_tick())
+    def connection_made(self, transport: asyncio.DatagramTransport) -> None:
+        event_loop = asyncio.get_event_loop()
+        self._tick_task = event_loop.create_task(self.tick_periodically())
         self._transport = transport
 
-    def connection_lost(self, exc):
-        self._is_paused = True
+    def connection_lost(self, exc) -> None:
+        logging.critical("SybilNode's connection is lost.")
+        self._is_writing_paused = True
 
-    def pause_writing(self):
-        self._is_paused = True
+    def pause_writing(self) -> None:
+        self._is_writing_paused = True
+        # In case of congestion, decrease the maximum number of nodes to the 90% of the current value.
+        self.__n_max_neighbours = self.__n_max_neighbours * 9 // 10
+        logging.debug("Maximum number of neighbours now %d", self.__n_max_neighbours)
 
-    def resume_writing(self):
-        self._is_paused = False
+    def resume_writing(self) -> None:
+        self._is_writing_paused = False
 
-    def sendto(self, data, addr):
-        if self._is_paused:
-            return
-        self._transport.sendto(data, addr)
+    def sendto(self, data, addr) -> None:
+        if not self._is_writing_paused:
+            self._transport.sendto(data, addr)
 
-    def error_received(self, exc):
-        logging.error("got error %s", exc)
+    def error_received(self, exc: Exception) -> None:
         if isinstance(exc, PermissionError):
+            # This exception (EPERM errno: 1) is kernel's way of saying that "you are far too fast, chill".
+            # It is also likely that we have received a ICMP source quench packet (meaning, that we really need to
+            # slow down.
+            #
+            # Read more here: http://www.archivum.info/comp.protocols.tcp-ip/2009-05/00088/UDP-socket-amp-amp-sendto
+            #                 -amp-amp-EPERM.html
+            #
             # In case of congestion, decrease the maximum number of nodes to the 90% of the current value.
             if self.__n_max_neighbours < 200:
                 logging.warning("Maximum number of neighbours are now less than 200 due to congestion!")
             else:
                 self.__n_max_neighbours = self.__n_max_neighbours * 9 // 10
                 logging.debug("Maximum number of neighbours now %d", self.__n_max_neighbours)
+        else:
+            # The previous "exception" was kind of "unexceptional", but we should log anything else.
+            logging.error("SybilNode operational error: `%s`", exc)
 
-    async def on_tick(self) -> None:
+    async def tick_periodically(self) -> None:
         while True:
-            await asyncio.sleep(1)
-            if len(self._routing_table) == 0:
+            await asyncio.sleep(TICK_INTERVAL)
+            if not self._routing_table:
                 await self.__bootstrap()
             self.__make_neighbours()
             self._routing_table.clear()
-            if not self._is_paused:
+            if not self._is_writing_paused:
                 self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
 
     def datagram_received(self, data, addr) -> None:
@@ -114,7 +129,7 @@ class SybilNode:
             self.__on_ANNOUNCE_PEER_query(message, addr)
 
     async def shutdown(self) -> None:
-        tasks = list(self.__tasks.values())
+        tasks = list(self.__parent_futures.values())
         for t in tasks:
             t.set_result(None)
         self._tick_task.cancel()
@@ -197,21 +212,36 @@ class SybilNode:
         if info_hash in self._complete_info_hashes:
             return
 
+        event_loop = asyncio.get_event_loop()
+
+        # A little clarification about parent and child futures might be really useful here:
+        # For every info hash we are interested in, we create ONE parent future and save it under self.__tasks
+        # (info_hash -> task) dictionary.
+        # For EVERY DisposablePeer working to fetch the metadata of that info hash, we create a child future. Hence, for
+        # every parent future, there should be *at least* one child future.
+        #
+        # Parent and child futures are "connected" to each other through `add_done_callback` functionality:
+        #     When a child is successfully done, it sets the result of its parent (`set_result()`), and if it was
+        #   unsuccessful to fetch the metadata, it just checks whether there are any other child futures left and if not
+        #   it terminates the parent future (by setting its result to None) and quits.
+        #     When a parent future is successfully done, (through the callback) it adds the info hash to the set of
+        #   completed metadatas and puts the metadata in the queue to be committed to the database.
+
         # create the parent future
-        if info_hash not in self.__tasks:
-            parent_f = self._loop.create_future()
+        if info_hash not in self.__parent_futures:
+            parent_f = event_loop.create_future()
             parent_f.child_count = 0
             parent_f.add_done_callback(lambda f: self._parent_task_done(f, info_hash))
-            self.__tasks[info_hash] = parent_f
+            self.__parent_futures[info_hash] = parent_f
 
-        parent_f = self.__tasks[info_hash]
+        parent_f = self.__parent_futures[info_hash]
 
         if parent_f.done():
             return
         if parent_f.child_count > MAX_ACTIVE_PEERS_PER_INFO_HASH:
             return
 
-        task = asyncio.ensure_future(bittorrent.fetch_metadata(
+        task = asyncio.ensure_future(bittorrent.fetch_metadata_from_peer(
             info_hash, peer_addr, self.__max_metadata_size, timeout=PEER_TIMEOUT))
         task.add_done_callback(lambda task: self._got_child_result(parent_f, task))
         parent_f.child_count += 1
@@ -221,6 +251,19 @@ class SybilNode:
         parent_task.child_count -= 1
         try:
             metadata = child_task.result()
+            # Bora asked:
+            #     Why do we check for parent_task being done here when a child got result? I mean, if parent_task is
+            #     done before, and successful, all of its childs will be terminated and this function cannot be called
+            #     anyway.
+            #
+            # --- https://github.com/boramalper/magnetico/pull/76#discussion_r119555423
+            #
+            #     Suppose two child tasks are fetching the same metadata for a parent and they finish at the same time
+            #     (or very close). The first one wakes up, sets the parent_task result which will cause the done
+            #     callback to be scheduled. The scheduler might still then chooses the second child task to run next
+            #     (why not? It's been waiting longer) before the parent has a chance to cancel it.
+            #
+            # Thus spoke Richard.
             if metadata and not parent_task.done():
                 parent_task.set_result(metadata)
         except asyncio.CancelledError:
@@ -235,16 +278,17 @@ class SybilNode:
             metadata = parent_task.result()
             if metadata:
                 self._complete_info_hashes.add(info_hash)
-                self._metadata_q.put_nowait((info_hash, metadata))
+                self.__metadata_queue.put_nowait((info_hash, metadata))
         except asyncio.CancelledError:
             pass
-        del self.__tasks[info_hash]
+        del self.__parent_futures[info_hash]
 
     async def __bootstrap(self) -> None:
+        event_loop = asyncio.get_event_loop()
         for node in BOOTSTRAPPING_NODES:
             try:
                 # AF_INET means ip4 only
-                responses = await self._loop.getaddrinfo(*node, family=socket.AF_INET)
+                responses = await event_loop.getaddrinfo(*node, family=socket.AF_INET)
                 for (family, type, proto, canonname, sockaddr) in responses:
                     data = self.__build_FIND_NODE_query(self.__true_id)
                     self.sendto(data, sockaddr)
