@@ -31,8 +31,8 @@ InfoHash = bytes
 Metadata = bytes
 
 
-class SybilNode(asyncio.DatagramProtocol):
-    def __init__(self, address: typing.Tuple[str, int], complete_info_hashes, max_metadata_size):
+class SybilNode:
+    def __init__(self, address: typing.Tuple[str, int], is_infohash_new, max_metadata_size):
         self.__true_id = self.__random_bytes(20)
 
         self.__address = address
@@ -43,8 +43,8 @@ class SybilNode(asyncio.DatagramProtocol):
         # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
-        self.__parent_futures = {}  # type: typing.Dict[dht.InfoHash, asyncio.Future]
-        self._complete_info_hashes = complete_info_hashes
+        self.__tasks = {}  # type: typing.Dict[dht.InfoHash, asyncio.Future]
+        self._is_inforhash_new = is_infohash_new
         self.__max_metadata_size = max_metadata_size
         # Complete metadatas will be added to the queue, to be retrieved and committed to the database.
         self.__metadata_queue = asyncio.Queue()  # typing.Collection[typing.Tuple[InfoHash, Metadata]]
@@ -53,9 +53,12 @@ class SybilNode(asyncio.DatagramProtocol):
 
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
-    async def launch(self) -> None:
-        event_loop = asyncio.get_event_loop()
-        await event_loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
+    def metadata_q(self):
+        return self._metadata_q
+
+    async def launch(self, loop):
+        self._loop = loop
+        await loop.create_datagram_endpoint(lambda: self, local_addr=self.__address)
 
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:
         event_loop = asyncio.get_event_loop()
@@ -107,6 +110,9 @@ class SybilNode(asyncio.DatagramProtocol):
             self._routing_table.clear()
             if not self._is_writing_paused:
                 self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
+            logging.debug("fetch metadata task count: %d", sum(
+                x.child_count for x in self.__tasks.values()))
+            logging.debug("asyncio task count: %d", len(asyncio.Task.all_tasks()))
 
     def datagram_received(self, data, addr) -> None:
         # Ignore nodes that uses port 0 (assholes).
@@ -209,7 +215,7 @@ class SybilNode(asyncio.DatagramProtocol):
         else:
             peer_addr = (addr[0], port)
 
-        if info_hash in self._complete_info_hashes:
+        if not self._is_inforhash_new(info_hash):
             return
 
         event_loop = asyncio.get_event_loop()
@@ -277,8 +283,7 @@ class SybilNode(asyncio.DatagramProtocol):
         try:
             metadata = parent_task.result()
             if metadata:
-                self._complete_info_hashes.add(info_hash)
-                self.__metadata_queue.put_nowait((info_hash, metadata))
+                self._metadata_q.put_nowait((info_hash, metadata))
         except asyncio.CancelledError:
             pass
         del self.__parent_futures[info_hash]

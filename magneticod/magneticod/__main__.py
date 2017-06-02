@@ -31,8 +31,8 @@ from . import dht
 from . import persistence
 
 
-def main():
-    arguments = parse_cmdline_arguments()
+def create_tasks():
+    arguments = parse_cmdline_arguments(sys.argv[1:])
 
     logging.basicConfig(level=arguments.loglevel, format="%(asctime)s  %(levelname)-8s  %(message)s")
     logging.info("magneticod v%d.%d.%d started", *__version__)
@@ -56,22 +56,16 @@ def main():
     complete_info_hashes = database.get_complete_info_hashes()
 
     loop = asyncio.get_event_loop()
-    node = dht.SybilNode(arguments.node_addr, complete_info_hashes, arguments.max_metadata_size)
-    loop.run_until_complete(node.launch())
+    node = dht.SybilNode(arguments.node_addr, database.is_infohash_new, arguments.max_metadata_size)
+    loop.create_task(node.launch(loop))
+    watch_q_task = loop.create_task(watch_q(database, node.metadata_q()))
+    watch_q_task.add_done_callback(lambda x: clean_up(loop, database, node))
+    return watch_q_task
 
-    watch_q_task = loop.create_task(metadata_queue_watcher(database, node.__metadata_queue))
 
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        logging.critical("Keyboard interrupt received! Exiting gracefully...")
-    finally:
-        database.close()
-        watch_q_task.cancel()
-        loop.run_until_complete(node.shutdown())
-        loop.run_until_complete(asyncio.wait([watch_q_task]))
-
-    return 0
+def clean_up(loop, database, node):
+    database.close()
+    loop.run_until_complete(node.shutdown())
 
 
 async def metadata_queue_watcher(database: persistence.Database, metadata_queue: asyncio.Queue) -> None:
@@ -112,7 +106,7 @@ def parse_size(value: str) -> int:
         raise argparse.ArgumentTypeError("Invalid argument. {}".format(e))
 
 
-def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
+def parse_cmdline_arguments(args) -> typing.Optional[argparse.Namespace]:
     parser = argparse.ArgumentParser(
         description="Autonomous BitTorrent DHT crawler and metadata fetcher.",
         epilog=textwrap.dedent("""\
@@ -156,7 +150,19 @@ def parse_cmdline_arguments() -> typing.Optional[argparse.Namespace]:
         action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.INFO,
         help="Print debugging information in addition to normal processing.",
     )
-    return parser.parse_args(sys.argv[1:])
+    return parser.parse_args(args)
+
+
+def main():
+    main_task = create_tasks()
+    try:
+        asyncio.get_event_loop().run_forever()
+    except KeyboardInterrupt:
+        logging.critical("Keyboard interrupt received! Exiting gracefully...")
+    finally:
+        main_task.cancel()
+
+    return 0
 
 
 if __name__ == "__main__":
