@@ -53,14 +53,12 @@ def create_tasks():
         logging.exception("could NOT connect to the database!")
         return 1
 
-    complete_info_hashes = database.get_complete_info_hashes()
-
     loop = asyncio.get_event_loop()
     node = dht.SybilNode(arguments.node_addr, database.is_infohash_new, arguments.max_metadata_size)
     loop.create_task(node.launch(loop))
-    watch_q_task = loop.create_task(watch_q(database, node.metadata_q()))
-    watch_q_task.add_done_callback(lambda x: clean_up(loop, database, node))
-    return watch_q_task
+    metadata_queue_watcher_task = loop.create_task(metadata_queue_watcher(database, node.metadata_q()))
+    metadata_queue_watcher_task.add_done_callback(lambda x: clean_up(loop, database, node))
+    return metadata_queue_watcher_task
 
 
 def clean_up(loop, database, node):

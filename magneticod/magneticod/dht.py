@@ -54,7 +54,7 @@ class SybilNode:
         logging.info("SybilNode %s on %s initialized!", self.__true_id.hex().upper(), address)
 
     def metadata_q(self):
-        return self._metadata_q
+        return self.__metadata_queue
 
     async def launch(self, loop):
         self._loop = loop
