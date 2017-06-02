@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
 import asyncio
-import itertools
 import zlib
 import logging
 import socket
@@ -43,7 +42,7 @@ class SybilNode:
         # Maximum number of neighbours (this is a THRESHOLD where, once reached, the search for new neighbours will
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
-        self.__tasks = {}  # type: typing.Dict[dht.InfoHash, asyncio.Future]
+        self.__parent_futures = {}  # type: typing.Dict[InfoHash, asyncio.Future]
         self._is_inforhash_new = is_infohash_new
         self.__max_metadata_size = max_metadata_size
         # Complete metadatas will be added to the queue, to be retrieved and committed to the database.
@@ -111,7 +110,7 @@ class SybilNode:
             if not self._is_writing_paused:
                 self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
             logging.debug("fetch metadata task count: %d", sum(
-                x.child_count for x in self.__tasks.values()))
+                x.child_count for x in self.__parent_futures.values()))
             logging.debug("asyncio task count: %d", len(asyncio.Task.all_tasks()))
 
     def datagram_received(self, data, addr) -> None:
@@ -283,7 +282,7 @@ class SybilNode:
         try:
             metadata = parent_task.result()
             if metadata:
-                self._metadata_q.put_nowait((info_hash, metadata))
+                self.__metadata_queue.put_nowait((info_hash, metadata))
         except asyncio.CancelledError:
             pass
         del self.__parent_futures[info_hash]
