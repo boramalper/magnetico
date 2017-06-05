@@ -57,6 +57,7 @@ class Database:
                             "size        INTEGER NOT NULL,"
                             "path        TEXT NOT NULL"
                             ");")
+            db_conn.execute("CREATE INDEX IF NOT EXISTS file_info_hash_index on files (torrent_id);")
 
         return db_conn
 
