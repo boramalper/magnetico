@@ -7,8 +7,8 @@ python:
 sudo: false
 
 install:
-  - "pip3 install --user ./magneticod"
-  - "pip3 install --user ./magneticow"
+  - "pip3 install ./magneticod"
+  - "pip3 install ./magneticow"
 
 script:
   - "pylint ./magneticod/magneticod"
