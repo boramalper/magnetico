@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import find_packages, setup, Extension
 
 
 def read_file(path):
@@ -15,7 +15,7 @@ setup(
     author="Mert Bora ALPER",
     author_email="bora@boramalper.org",
     license="GNU Affero General Public License v3 or later (AGPLv3+)",
-    packages=["magneticod"],
+    packages=find_packages(),
     zip_safe=False,
     entry_points={
         "console_scripts": ["magneticod=magneticod.__main__:main"]
@@ -36,5 +36,12 @@ setup(
         "Operating System :: POSIX :: Linux",
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: Implementation :: CPython",
+    ],
+
+    ext_modules=[
+        Extension(
+            "magneticod.bencoder._fast",
+            sources=["magneticod/bencoder/_fast.c"],
+        ),
     ]
 )

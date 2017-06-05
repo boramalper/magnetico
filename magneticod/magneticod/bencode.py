@@ -13,26 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
 
-
 """
-bencode
-    Wrapper around bencoder.pyx library.
-
-bencoder.pyx
-    Copyright (c) 2016, whtsky
-    All rights reserved.
-    https://github.com/whtsky/bencoder.pyx
-
 Warning:
     Encoders do NOT check for circular objects! (and will NEVER check due to speed concerns).
-
-TODO:
-    Support bytearrays as well! (Currently, only bytes).
 """
+
 import typing
 
-import bencoder
-
+from magneticod.bencoder import dumps, loads, loads2
 
 Types = typing.Union[int, bytes, list, "KRPCDict"]
 KRPCDict = typing.Dict[bytes, Types]
@@ -40,14 +28,14 @@ KRPCDict = typing.Dict[bytes, Types]
 
 def dumps(obj) -> bytes:
     try:
-        return bencoder.bencode(obj)
+        return dumps(obj)
     except:
         raise BencodeEncodingError()
 
 
 def loads(bytes_object: bytes) -> Types:
     try:
-        return bencoder.decode_func[bytes_object[0]](bytes_object, 0)[0]
+        return loads(bytes_object)
     except Exception as exc:
         raise BencodeDecodingError(exc)
 
@@ -61,7 +49,7 @@ def loads2(bytes_object: bytes) -> typing.Tuple[Types, int]:
         print(">>>", dump[i:])  # OUTPUT: >>> b'OH YEAH'
     """
     try:
-        return bencoder.decode_func[bytes_object[0]](bytes_object, 0)
+        return loads2(bytes_object)
     except Exception as exc:
         raise BencodeDecodingError(exc)
 
