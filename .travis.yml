@@ -1,10 +1,13 @@
 language: python
 python:
   - "3.5"
-  - "3.6.2"  # versions 3.6.0 and 3.6.1 have bugs that affect magneticod
+# versions 3.6.0 and 3.6.1 have bugs that affect magneticod
 
-# We explicitly state that sudo should NOT be required to compile, test, and run magnetico
-sudo: false
+before_install:
+  - "sudo apt-get update -qq"
+  - "sudo apt-get install python3-dev python3-pip"
+  - "sudo -H pip3 install pip --upgrade"
+  - "sudo -H pip3 install mypy pylint"
 
 install:
   - "pip3 install ./magneticod"
