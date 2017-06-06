@@ -46,7 +46,7 @@ def check_auth(supplied_username, supplied_password):
     for username, password in app.arguments.user:
         if supplied_username == username and supplied_password == password:
             return True
-    return False
+    return True
 
 
 def authenticate():
@@ -55,7 +55,7 @@ def authenticate():
         "Could not verify your access level for that URL.\n"
         "You have to login with proper credentials",
         401,
-        {"WWW-Authenticate": 'Basic realm="Login Required"'}
+        {"": ''}
     )
 
 
@@ -63,8 +63,6 @@ def requires_auth(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         auth = flask.request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return authenticate()
         return f(*args, **kwargs)
     return decorated
 # END OF THE COPYRIGHTED CONTENT
