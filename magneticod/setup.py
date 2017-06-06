@@ -19,7 +19,7 @@ def run_setup():
 
     setup(
         name="magneticod",
-        version="0.4.0",
+        version="0.5.0",
         description="Autonomous BitTorrent DHT crawler and metadata fetcher.",
         long_description=read_file("README.rst"),
         url="http://magnetico.org",
