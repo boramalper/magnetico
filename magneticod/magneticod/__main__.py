@@ -41,9 +41,10 @@ def create_tasks():
     try:
         import uvloop
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-        logging.info("uvloop is being used")
+        logging.info("uvloop is in use")
     except ImportError:
-        logging.exception("uvloop could not be imported, using the default asyncio implementation")
+        if sys.platform not in ["linux", "darwin"]:
+            logging.warning("uvloop could not be imported, using the default asyncio implementation")
 
     # noinspection PyBroadException
     try:
