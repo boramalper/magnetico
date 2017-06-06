@@ -20,7 +20,7 @@ Warning:
 
 import typing
 
-from magneticod.bencoder import dumps, loads, loads2
+import magneticod.bencoder
 
 Types = typing.Union[int, bytes, list, "KRPCDict"]
 KRPCDict = typing.Dict[bytes, Types]
@@ -28,14 +28,14 @@ KRPCDict = typing.Dict[bytes, Types]
 
 def dumps(obj) -> bytes:
     try:
-        return dumps(obj)
+        return magneticod.bencoder.dumps(obj)
     except:
         raise BencodeEncodingError()
 
 
 def loads(bytes_object: bytes) -> Types:
     try:
-        return loads(bytes_object)
+        return magneticod.bencoder.loads(bytes_object)
     except Exception as exc:
         raise BencodeDecodingError(exc)
 
@@ -49,7 +49,7 @@ def loads2(bytes_object: bytes) -> typing.Tuple[Types, int]:
         print(">>>", dump[i:])  # OUTPUT: >>> b'OH YEAH'
     """
     try:
-        return loads2(bytes_object)
+        return magneticod.bencoder.loads2(bytes_object)
     except Exception as exc:
         raise BencodeDecodingError(exc)
 
