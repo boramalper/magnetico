@@ -7,7 +7,7 @@ python:
 # versions 3.6.0 and 3.6.1 have bugs that affect magneticod
 
 cache: pip
-addons:  
+addons:
   apt:
     packages:  
       - python3-dev
