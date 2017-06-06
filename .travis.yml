@@ -5,14 +5,16 @@ python:
   - "3.5"
 # versions 3.6.0 and 3.6.1 have bugs that affect magneticod
 
-before_install:
-  - "sudo apt-get update -qq"
-  - "sudo apt-get install python3-dev"
-  - "pip3 install mypy pylint"
+cache: pip
+addons:
+  apt:
+    packages:
+      - python3-dev
 
 install:
-  - "pip3 install ./magneticod"
-  - "pip3 install ./magneticow"
+  - "pip intall mypy pylint
+  - "pip install ./magneticod"
+  - "pip install ./magneticow"
 
 script:
   - "pylint ./magneticod/magneticod"
