@@ -3,22 +3,22 @@ dist: xenial
 
 language: python
 python:
-- "3.5"
+  - "3.5"
 # versions 3.6.0 and 3.6.1 have bugs that affect magnetico
 
 install:
-- "pip install mypy pylint"
-- "pip install ./magneticod"
-- "pip install ./magneticow"
+  - "pip install mypy pylint"
+  - "pip install ./magneticod"
+  - "pip install ./magneticow"
 
 cache: pip
 addons:
   apt:
-    packages:  
+    packages:
       - python3-dev
 
 script:
-- "pylint ./magneticod/magneticod"   
-- "pylint ./magneticow/magneticow"  
-- "mypy ./magneticod/magneticod"
-- "mypy ./magneticow/magneticow"
+  - "pylint ./magneticod/magneticod"
+  - "pylint ./magneticow/magneticow"
+  - "mypy ./magneticod/magneticod"
+  - "mypy ./magneticow/magneticow"
