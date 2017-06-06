@@ -81,7 +81,7 @@ class Database:
                 assert type(info[b"length"]) is int
                 files.append((info_hash, info[b"length"], name))
         # TODO: Make sure this catches ALL, AND ONLY operational errors
-        except (bencode.BencodeDecodingError, AssertionError, KeyError, AttributeError, UnicodeDecodeError):
+        except (bencode.BencodeDecodingError, AssertionError, KeyError, AttributeError, UnicodeDecodeError, TypeError):
             return False
 
         self.__pending_metadata.append((info_hash, name, sum(f[1] for f in files), discovered_on))
