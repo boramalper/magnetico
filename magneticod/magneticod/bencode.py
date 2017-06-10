@@ -19,8 +19,9 @@ Warning:
 """
 
 import typing
+from io import BytesIO
 
-import magneticod.bencoder
+import better_bencode
 
 Types = typing.Union[int, bytes, list, "KRPCDict"]
 KRPCDict = typing.Dict[bytes, Types]
@@ -28,14 +29,14 @@ KRPCDict = typing.Dict[bytes, Types]
 
 def dumps(obj) -> bytes:
     try:
-        return magneticod.bencoder.dumps(obj)
+        return better_bencode.dumps(obj)
     except:
         raise BencodeEncodingError()
 
 
 def loads(bytes_object: bytes) -> Types:
     try:
-        return magneticod.bencoder.loads(bytes_object)
+        return better_bencode.loads(bytes_object)
     except Exception as exc:
         raise BencodeDecodingError(exc)
 
@@ -48,8 +49,9 @@ def loads2(bytes_object: bytes) -> typing.Tuple[Types, int]:
         object, i = loads2(dump)
         print(">>>", dump[i:])  # OUTPUT: >>> b'OH YEAH'
     """
+    bio = BytesIO(bytes_object)
     try:
-        return magneticod.bencoder.loads2(bytes_object)
+        return better_bencode.load(bio), bio.tell()
     except Exception as exc:
         raise BencodeDecodingError(exc)
 
