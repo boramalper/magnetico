@@ -153,6 +153,9 @@ class SybilNode:
         except AssertionError:
             return
 
+        # Ignore nodes with port 0.
+        nodes = [n for n in nodes if n[1][1] != 0]
+
         # Add new found nodes to the routing table, assuring that we have no more than n_max_neighbours in total.
         if len(self._routing_table) < self.__n_max_neighbours:
             self._routing_table.update(nodes)
