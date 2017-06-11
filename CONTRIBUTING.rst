@@ -55,7 +55,8 @@ Python Coding Guidelines
 
 * Maximum line length is 120 characters.
 * Do not abbreviate variable names, unless the abbreviation is famous (even though it might be *obvious* in its code
-  context). For instance, `HTTP` is accepted but `_f` for *futures* and `p_` for *parent* are NOT.
+  context). For instance, `HTTP` is accepted, but `_f` for *futures* and `p_` for *parent* are NOT.
+  
   * A possible exception of this rule is to use shorter names in case of complex symbolic manipulation and/or
   operations, for instance in complex for-loops, functions etc. Shorter names would allow the programmer to follow the
   flow of the operations and logic behind the manipulation more easily and hence justified. But, comments are required
