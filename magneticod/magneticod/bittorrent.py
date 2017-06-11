@@ -63,7 +63,7 @@ class DisposablePeer:
             self._writer.write(b"\x13BitTorrent protocol%s%s%s" % (
                 b"\x00\x00\x00\x00\x00\x10\x00\x01",
                 self.__info_hash,
-                self.__random_bytes(20)
+                os.urandom(20)
             ))
             # Honestly speaking, BitTorrent protocol might be one of the most poorly documented and (not the most but)
             # badly designed protocols I have ever seen (I am 19 years old so what I could have seen?).
@@ -217,7 +217,3 @@ class DisposablePeer:
             self.__ut_metadata.to_bytes(1, "big"),
             msg_dict_dump
         ))
-
-    @staticmethod
-    def __random_bytes(n: int) -> bytes:
-        return os.urandom(n)

@@ -31,42 +31,6 @@ from . import dht
 from . import persistence
 
 
-def create_tasks():
-    arguments = parse_cmdline_arguments(sys.argv[1:])
-
-    logging.basicConfig(level=arguments.loglevel, format="%(asctime)s  %(levelname)-8s  %(message)s")
-    logging.info("magneticod v%d.%d.%d started", *__version__)
-
-    # use uvloop if it's installed
-    try:
-        import uvloop
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-        logging.info("uvloop is in use")
-    except ImportError:
-        if sys.platform not in ["linux", "darwin"]:
-            logging.warning("uvloop could not be imported, using the default asyncio implementation")
-
-    # noinspection PyBroadException
-    try:
-        path = arguments.database_file
-        database = persistence.Database(path)
-    except:
-        logging.exception("could NOT connect to the database!")
-        return 1
-
-    loop = asyncio.get_event_loop()
-    node = dht.SybilNode(arguments.node_addr, database.is_infohash_new, arguments.max_metadata_size)
-    loop.create_task(node.launch(loop))
-    metadata_queue_watcher_task = loop.create_task(metadata_queue_watcher(database, node.metadata_q()))
-    metadata_queue_watcher_task.add_done_callback(lambda x: clean_up(loop, database, node))
-    return metadata_queue_watcher_task
-
-
-def clean_up(loop, database, node):
-    database.close()
-    loop.run_until_complete(node.shutdown())
-
-
 async def metadata_queue_watcher(database: persistence.Database, metadata_queue: asyncio.Queue) -> None:
     """
      Watches for the metadata queue to commit any complete info hashes to the database.
@@ -152,14 +116,42 @@ def parse_cmdline_arguments(args) -> typing.Optional[argparse.Namespace]:
     return parser.parse_args(args)
 
 
-def main():
-    main_task = create_tasks()
+def main() -> int:
+    # main_task = create_tasks()
+    arguments = parse_cmdline_arguments(sys.argv[1:])
+
+    logging.basicConfig(level=arguments.loglevel, format="%(asctime)s  %(levelname)-8s  %(message)s")
+    logging.info("magneticod v%d.%d.%d started", *__version__)
+
+    # use uvloop if it's installed
+    try:
+        import uvloop
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        logging.info("uvloop is in use")
+    except ImportError:
+        if sys.platform not in ["linux", "darwin"]:
+            logging.warning("uvloop could not be imported, using the default asyncio implementation")
+
+    # noinspection PyBroadException
+    try:
+        database = persistence.Database(arguments.database_file)
+    except:
+        logging.exception("could NOT connect to the database!")
+        return 1
+
+    loop = asyncio.get_event_loop()
+    node = dht.SybilNode(database.is_infohash_new, arguments.max_metadata_size)
+    loop.create_task(node.launch(arguments.node_addr))
+    metadata_queue_watcher_task = loop.create_task(metadata_queue_watcher(database, node.metadata_q()))
+
     try:
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         logging.critical("Keyboard interrupt received! Exiting gracefully...")
     finally:
-        main_task.cancel()
+        metadata_queue_watcher_task.cancel()
+        database.close()
+        loop.run_until_complete(node.shutdown())
 
     return 0
 
