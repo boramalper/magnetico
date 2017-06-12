@@ -44,14 +44,7 @@ def run_setup():
             "Operating System :: POSIX :: Linux",
             "Programming Language :: Python :: 3 :: Only",
             "Programming Language :: Python :: Implementation :: CPython",
-        ],
-
-        ext_modules=[
-            Extension(
-                "magneticod.bencoder._fast",
-                sources=["magneticod/bencoder/_fast.c"],
-            ),
-        ],
+        ]
     )
 
 
