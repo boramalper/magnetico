@@ -144,6 +144,15 @@ many GNU/Linux distributions):
 4. If you wish to see the logs, or to kill **magneticow**, ``screen -r magneticow`` will attach the original screen
    session back. **magneticow** will exit gracefully upon keyboard interrupt (Ctrl+C) [SIGINT].
 
+REST-ful HTTP API
+=================
+    **magneticow** offers a REST-ful HTTP API for 3rd-party applications to interact with **magnetico** setups. Examples
+    would be an Android app for searching torrents **magnetico** discovered and queueing them on your seedbox, or a
+    custom data analysis/statistics application developed for a research project on BitTorrent network. Nevertheless, it
+    is up to you what to do with it at the end of the day.
+
+See `API documentation <./docs/API/README.md>`_ for more details.
+
 License
 =======
 All the code is licensed under AGPLv3, unless otherwise stated in the source specific source. See ``COPYING`` file
