@@ -80,7 +80,7 @@ class SybilNode(asyncio.DatagramProtocol):
             self._transport.sendto(data, addr)
 
     def error_received(self, exc: Exception) -> None:
-        if isinstance(exc, PermissionError) or (isinstance(exc, OSError) and errno.ENOBUFS):
+        if isinstance(exc, PermissionError) or (isinstance(exc, OSError) and exc.errno == errno.ENOBUFS):
             # This exception (EPERM errno: 1) is kernel's way of saying that "you are far too fast, chill".
             # It is also likely that we have received a ICMP source quench packet (meaning, that we really need to
             # slow down.
