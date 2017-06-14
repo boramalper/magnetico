@@ -43,7 +43,8 @@ magneticod_db = None
 # BEGINNING OF THE COPYRIGHTED CONTENT
 def check_auth(supplied_username, supplied_password):
     """ This function is called to check if a username / password combination is valid. """
-    for username, password in app.arguments.user:
+    # Because we do monkey-patch! [in magneticow.__main__.py:main()]
+    for username, password in app.arguments.user:  # pylint: disable=maybe-no-member
         if supplied_username == username and supplied_password == password:
             return True
     return False

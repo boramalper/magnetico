@@ -149,7 +149,7 @@ class SybilNode(asyncio.DatagramProtocol):
         await asyncio.wait([self._tick_task])
         self._transport.close()
 
-    def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:
+    def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:  # pylint: disable=invalid-name
         try:
             nodes_arg = message[b"r"][b"nodes"]
             assert type(nodes_arg) is bytes and len(nodes_arg) % 26 == 0
@@ -168,7 +168,7 @@ class SybilNode(asyncio.DatagramProtocol):
         if len(self._routing_table) < self.__n_max_neighbours:
             self._routing_table.update(nodes[:self.__n_max_neighbours - len(self._routing_table)])
 
-    def __on_GET_PEERS_query(self, message: bencode.KRPCDict, addr: NodeAddress) -> None:
+    def __on_GET_PEERS_query(self, message: bencode.KRPCDict, addr: NodeAddress) -> None:  # pylint: disable=invalid-name
         try:
             transaction_id = message[b"t"]
             assert type(transaction_id) is bytes and transaction_id
@@ -188,7 +188,7 @@ class SybilNode(asyncio.DatagramProtocol):
         # transport at every tick?
         self.sendto(data, addr)
 
-    def __on_ANNOUNCE_PEER_query(self, message: bencode.KRPCDict, addr: NodeAddress) -> None:
+    def __on_ANNOUNCE_PEER_query(self, message: bencode.KRPCDict, addr: NodeAddress) -> None:  # pylint: disable=invalid-name
         try:
             node_id = message[b"a"][b"id"]
             assert type(node_id) is bytes and len(node_id) == 20
@@ -333,7 +333,7 @@ class SybilNode(asyncio.DatagramProtocol):
         return checksum.to_bytes(4, "big")
 
     @staticmethod
-    def __build_FIND_NODE_query(id_: bytes) -> bytes:
+    def __build_FIND_NODE_query(id_: bytes) -> bytes:  # pylint: disable=invalid-name
         """ Reference Implementation:
         bencode.dumps({
             b"y": b"q",
@@ -352,7 +352,7 @@ class SybilNode(asyncio.DatagramProtocol):
         )
 
     @staticmethod
-    def __build_GET_PEERS_query(id_: bytes, transaction_id: bytes, token: bytes) -> bytes:
+    def __build_GET_PEERS_query(id_: bytes, transaction_id: bytes, token: bytes) -> bytes:  # pylint: disable=invalid-name
         """ Reference Implementation:
 
         bencode.dumps({
@@ -371,7 +371,7 @@ class SybilNode(asyncio.DatagramProtocol):
         )
 
     @staticmethod
-    def __build_ANNOUNCE_PEER_query(id_: bytes, transaction_id: bytes) -> bytes:
+    def __build_ANNOUNCE_PEER_query(id_: bytes, transaction_id: bytes) -> bytes:  # pylint: disable=invalid-name
         """ Reference Implementation:
 
         bencode.dumps({
