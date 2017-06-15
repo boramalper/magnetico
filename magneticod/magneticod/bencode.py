@@ -23,25 +23,39 @@ from io import BytesIO
 
 import better_bencode
 
-Types = typing.Union[int, bytes, list, "KRPCDict"]
-KRPCDict = typing.Dict[bytes, Types]
+"""
+The type definitions under this comment is actually this:
+
+    KRPCTypes = typing.Union[int, bytes, "KRPCList", "KRPCDict"]
+    KRPCList = typing.List[KRPCTypes]
+    KRPCDict = typing.Dict[bytes, KRPCTypes]
+    
+But since mypy:
+* does NOT support self-referential types
+* have problems with complex Unions (in case you thought about expanding manually: I tried)
+
+just write `typing.Any`. =(
+"""
+KRPCTypes = typing.Any
+KRPCList = typing.Any
+KRPCDict = typing.Any
 
 
-def dumps(obj) -> bytes:
+def dumps(obj: KRPCTypes) -> bytes:
     try:
         return better_bencode.dumps(obj)
     except:
         raise BencodeEncodingError()
 
 
-def loads(bytes_object: bytes) -> Types:
+def loads(bytes_object: bytes) -> KRPCTypes:
     try:
         return better_bencode.loads(bytes_object)
     except Exception as exc:
         raise BencodeDecodingError(exc)
 
 
-def loads2(bytes_object: bytes) -> typing.Tuple[Types, int]:
+def loads2(bytes_object: bytes) -> typing.Tuple[KRPCTypes, int]:
     """
     Returns the bencoded object AND the index where the dump of the decoded object ends (exclusive). In less words:
 

@@ -58,8 +58,10 @@ class SybilNode(asyncio.DatagramProtocol):
         await asyncio.get_event_loop().create_datagram_endpoint(lambda: self, local_addr=address)
         logging.info("SybliNode is launched on %s!", address)
 
-    def connection_made(self, transport: asyncio.DatagramTransport) -> None:
-        self._tick_task = asyncio.get_event_loop().create_task(self.tick_periodically())
+    # mypy ignored: mypy errors because we explicitly stated `transport`s type =)
+    def connection_made(self, transport: asyncio.DatagramTransport) -> None:  # type: ignore
+        # mypy ignored: mypy doesn't know (yet) about coroutines
+        self._tick_task = asyncio.get_event_loop().create_task(self.tick_periodically())  # type: ignore
         self._transport = transport
 
     def connection_lost(self, exc) -> None:
@@ -116,8 +118,9 @@ class SybilNode(asyncio.DatagramProtocol):
             self._routing_table.clear()
             if not self._is_writing_paused:
                 self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
+            # mypy ignore: because .child_count on Future is monkey-patched
             logging.debug("fetch metadata task count: %d", sum(
-                x.child_count for x in self.__parent_futures.values()))
+                x.child_count for x in self.__parent_futures.values()))  # type: ignore
             logging.debug("asyncio task count: %d", len(asyncio.Task.all_tasks()))
 
     def datagram_received(self, data, addr) -> None:
@@ -238,7 +241,8 @@ class SybilNode(asyncio.DatagramProtocol):
         # create the parent future
         if info_hash not in self.__parent_futures:
             parent_f = event_loop.create_future()
-            parent_f.child_count = 0
+            # mypy ignore: because .child_count on Future is being monkey-patched here!
+            parent_f.child_count = 0  # type: ignore
             parent_f.add_done_callback(lambda f: self._parent_task_done(f, info_hash))
             self.__parent_futures[info_hash] = parent_f
 
@@ -246,13 +250,15 @@ class SybilNode(asyncio.DatagramProtocol):
 
         if parent_f.done():
             return
-        if parent_f.child_count > MAX_ACTIVE_PEERS_PER_INFO_HASH:
+        # mypy ignore: because .child_count on Future is monkey-patched
+        if parent_f.child_count > MAX_ACTIVE_PEERS_PER_INFO_HASH:  # type: ignore
             return
 
         task = asyncio.ensure_future(bittorrent.fetch_metadata_from_peer(
             info_hash, peer_addr, self.__max_metadata_size, timeout=PEER_TIMEOUT))
         task.add_done_callback(lambda task: self._got_child_result(parent_f, task))
-        parent_f.child_count += 1
+        # mypy ignore: because .child_count on Future is monkey-patched
+        parent_f.child_count += 1  # type: ignore
         parent_f.add_done_callback(lambda f: task.cancel())
 
     def _got_child_result(self, parent_task, child_task):

@@ -17,5 +17,5 @@ install:
 script:
   - "pylint ./magneticod/magneticod"
   - "pylint ./magneticow/magneticow"
-  - "mypy ./magneticod/magneticod"
-  - "mypy ./magneticow/magneticow"
+  - "mypy --ignore-missing-imports --follow-imports=skip ./magneticod/magneticod"
+  - "mypy --ignore-missing-imports --follow-imports=skip ./magneticow/magneticow"

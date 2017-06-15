@@ -44,7 +44,7 @@ def main() -> int:
     return 1
 
 
-def parse_args() -> dict:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Lightweight web interface for magnetico.",
         epilog=textwrap.dedent("""\

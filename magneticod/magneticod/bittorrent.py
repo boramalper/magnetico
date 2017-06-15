@@ -25,8 +25,10 @@ InfoHash = bytes
 PeerAddress = typing.Tuple[str, int]
 
 
-async def fetch_metadata_from_peer(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int, timeout=None):
+async def fetch_metadata_from_peer(info_hash: InfoHash, peer_addr: PeerAddress, max_metadata_size: int, timeout=None) \
+    -> typing.Optional[bytes]:
     try:
+        # asyncio.wait_for "returns result of the Future or coroutine."Returns result of the Future or coroutine.
         return await asyncio.wait_for(DisposablePeer(info_hash, peer_addr, max_metadata_size).run(), timeout=timeout)
     except asyncio.TimeoutError:
         return None
@@ -42,25 +44,25 @@ class DisposablePeer:
         self.__info_hash = info_hash
 
         self.__ext_handshake_complete = False  # Extension Handshake
-        self.__ut_metadata = None  # Since we don't know ut_metadata code that remote peer uses...
+        self.__ut_metadata = int()  # Since we don't know ut_metadata code that remote peer uses...
 
         self.__max_metadata_size = max_metadata_size
         self.__metadata_size = None
         self.__metadata_received = 0  # Amount of metadata bytes received...
-        self.__metadata = None
+        self.__metadata = bytearray()
 
         self._run_task = None
         self._writer = None
 
 
-    async def run(self):
+    async def run(self) -> typing.Optional[bytes]:
         event_loop = asyncio.get_event_loop()
         self._metadata_future = event_loop.create_future()
 
         try:
-            self._reader, self._writer = await asyncio.open_connection(*self.__peer_addr, loop=event_loop)
+            self._reader, self._writer = await asyncio.open_connection(*self.__peer_addr, loop=event_loop)  # type: ignore
             # Send the BitTorrent handshake message (0x13 = 19 in decimal, the length of the handshake message)
-            self._writer.write(b"\x13BitTorrent protocol%s%s%s" % (
+            self._writer.write(b"\x13BitTorrent protocol%s%s%s" % (  # type: ignore
                 b"\x00\x00\x00\x00\x00\x10\x00\x01",
                 self.__info_hash,
                 os.urandom(20)
@@ -124,7 +126,7 @@ class DisposablePeer:
         # In case you cannot read hex:
         #   0x14 = 20  (BitTorrent ID indicating that it's an extended message)
         #   0x00 =  0  (Extension ID indicating that it's the handshake message)
-        self._writer.write(b"%b\x14%s" % (
+        self._writer.write(b"%b\x14%s" % (  # type: ignore
             (2 + len(msg_dict_dump)).to_bytes(4, "big"),
             b'\0' + msg_dict_dump
         ))
@@ -156,7 +158,7 @@ class DisposablePeer:
 
         self.__ut_metadata = ut_metadata
         try:
-            self.__metadata = bytearray(metadata_size)
+            self.__metadata = bytearray(metadata_size)  # type: ignore
         except MemoryError:
             logging.exception("Could not allocate %.1f KiB for the metadata!", metadata_size / 1024)
             raise
@@ -212,7 +214,7 @@ class DisposablePeer:
         # In case you cannot read_file hex:
         #   0x14 = 20  (BitTorrent ID indicating that it's an extended message)
         #   0x03 =  3  (Extension ID indicating that it's an ut_metadata message)
-        self._writer.write(b"%b\x14%s%s" % (
+        self._writer.write(b"%b\x14%s%s" % (  # type: ignore
             (2 + len(msg_dict_dump)).to_bytes(4, "big"),
             self.__ut_metadata.to_bytes(1, "big"),
             msg_dict_dump

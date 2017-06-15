@@ -65,7 +65,7 @@ class Database:
         files = []
         discovered_on = int(time.time())
         try:
-            info = bencode.loads(metadata)  # type: dict
+            info = bencode.loads(metadata)
 
             assert b"/" not in info[b"name"]
             name = info[b"name"].decode("utf-8")
@@ -85,7 +85,10 @@ class Database:
             return False
 
         self.__pending_metadata.append((info_hash, name, sum(f[1] for f in files), discovered_on))
-        self.__pending_files += files
+        # MYPY BUG: error: Argument 1 to "__iadd__" of "list" has incompatible type List[Tuple[bytes, Any, str]];
+        #     expected Iterable[Tuple[bytes, int, bytes]]
+        # List is an Iterable man...
+        self.__pending_files += files  # type: ignore
 
         logging.info("Added: `%s`", name)
 

@@ -42,7 +42,7 @@ async def metadata_queue_watcher(database: persistence.Database, metadata_queue:
             logging.info("Corrupt metadata for %s! Ignoring.", info_hash.hex())
 
 
-def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
+def parse_ip_port(netloc: str) -> typing.Optional[typing.Tuple[str, int]]:
     # In case no port supplied
     try:
         return str(ipaddress.ip_address(netloc)), 0
@@ -55,9 +55,9 @@ def parse_ip_port(netloc) -> typing.Optional[typing.Tuple[str, int]]:
         ip = str(ipaddress.ip_address(parsed.hostname))
         port = parsed.port
         if port is None:
-            raise argparse.ArgumentParser("Invalid node address supplied!")
+            return None
     except ValueError:
-        raise argparse.ArgumentParser("Invalid node address supplied!")
+        return None
 
     return ip, port
 
@@ -69,7 +69,7 @@ def parse_size(value: str) -> int:
         raise argparse.ArgumentTypeError("Invalid argument. {}".format(e))
 
 
-def parse_cmdline_arguments(args) -> typing.Optional[argparse.Namespace]:
+def parse_cmdline_arguments(args: typing.List[str]) -> typing.Optional[argparse.Namespace]:
     parser = argparse.ArgumentParser(
         description="Autonomous BitTorrent DHT crawler and metadata fetcher.",
         epilog=textwrap.dedent("""\
@@ -142,7 +142,8 @@ def main() -> int:
     loop = asyncio.get_event_loop()
     node = dht.SybilNode(database.is_infohash_new, arguments.max_metadata_size)
     loop.create_task(node.launch(arguments.node_addr))
-    metadata_queue_watcher_task = loop.create_task(metadata_queue_watcher(database, node.metadata_q()))
+    # mypy ignored: mypy doesn't know (yet) about coroutines
+    metadata_queue_watcher_task = loop.create_task(metadata_queue_watcher(database, node.metadata_q()))  # type: ignore
 
     try:
         asyncio.get_event_loop().run_forever()
