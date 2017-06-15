@@ -153,6 +153,11 @@ class SybilNode(asyncio.DatagramProtocol):
         self._transport.close()
 
     def __on_FIND_NODE_response(self, message: bencode.KRPCDict) -> None:  # pylint: disable=invalid-name
+        # Well, we are not really interested in your response if our routing table is already full; sorry.
+        # (Thanks to Glandos@GitHub for the heads up!)
+        if len(self._routing_table) >= self.__n_max_neighbours:
+            return
+
         try:
             nodes_arg = message[b"r"][b"nodes"]
             assert type(nodes_arg) is bytes and len(nodes_arg) % 26 == 0
@@ -164,12 +169,8 @@ class SybilNode(asyncio.DatagramProtocol):
         except AssertionError:
             return
 
-        # Ignore nodes with port 0.
-        nodes = [n for n in nodes if n[1][1] != 0]
-
-        # Add new found nodes to the routing table, assuring that we have no more than n_max_neighbours in total.
-        if len(self._routing_table) < self.__n_max_neighbours:
-            self._routing_table.update(nodes[:self.__n_max_neighbours - len(self._routing_table)])
+        nodes = [n for n in nodes if n[1][1] != 0]  # Ignore nodes with port 0.
+        self._routing_table.update(nodes[:self.__n_max_neighbours - len(self._routing_table)])
 
     def __on_GET_PEERS_query(self, message: bencode.KRPCDict, addr: NodeAddress) -> None:  # pylint: disable=invalid-name
         try:
