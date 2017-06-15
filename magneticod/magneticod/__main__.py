@@ -151,8 +151,8 @@ def main() -> int:
         logging.critical("Keyboard interrupt received! Exiting gracefully...")
     finally:
         metadata_queue_watcher_task.cancel()
-        database.close()
         loop.run_until_complete(node.shutdown())
+        database.close()
 
     return 0
 
