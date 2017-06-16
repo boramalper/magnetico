@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0">
+    <channel>
+        <title>{{ title }}</title>
+        {% for item in items %}
+        <item>
+            <title>{{ item.title }}</title>
+            <guid>{{ item.info_hash }}</guid>
+            <enclosure url="magnet:?xt=urn:btih:{{ item.info_hash }}&amp;dn={{ item.title }}" type="application/x-bittorrent" />
+        </item>
+        {% endfor %}
+    </channel>
+</rss>

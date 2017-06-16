@@ -16,6 +16,7 @@ import collections
 import functools
 import datetime as dt
 from datetime import datetime
+import hashlib
 import logging
 import sqlite3
 import os
@@ -41,7 +42,7 @@ magneticod_db = None
 # Adapted from: http://flask.pocoo.org/snippets/8/
 # (c) Copyright 2010 - 2017 by Armin Ronacher
 # BEGINNING OF THE COPYRIGHTED CONTENT
-def check_auth(supplied_username, supplied_password):
+def is_authorized(supplied_username, supplied_password):
     """ This function is called to check if a username / password combination is valid. """
     # Because we do monkey-patch! [in magneticow.__main__.py:main()]
     for username, password in app.arguments.user:  # pylint: disable=maybe-no-member
@@ -64,12 +65,23 @@ def requires_auth(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         auth = flask.request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
+        if not auth or not is_authorized(auth.username, auth.password):
             return authenticate()
         return f(*args, **kwargs)
     return decorated
 # END OF THE COPYRIGHTED CONTENT
 
+
+def generate_feed_hash(username: str, password: str, filter_: str) -> str:
+    """
+    Deterministically generates the feed hash from given username, password, and filter.
+    Hash is the hex encoding of the SHA256 sum.
+    :param username:
+    :param password:
+    :param filter_:
+    :return:
+    """
+    return hashlib.sha256((username + "\0" + password + "\0" + filter_).encode()).digest().hex()
 
 @app.route("/")
 @requires_auth
@@ -128,6 +140,9 @@ def search_torrents():
     else:
         context["next_page_exists"] = True
 
+    username, password = flask.request.authorization.username, flask.request.authorization.password
+    context["subscription_url"] = "/feed?filter=%s&hash=%s" % (search, generate_feed_hash(username, password, search))
+
     return flask.render_template("torrents.html", **context)
 
 
@@ -157,6 +172,9 @@ def newest_torrents():
         context["next_page_exists"] = False
     else:
         context["next_page_exists"] = True
+
+    username, password = flask.request.authorization.username, flask.request.authorization.password
+    context["subscription_url"] = "/feed?filter=&hash=%s" % (generate_feed_hash(username, password, ""),)
 
     return flask.render_template("torrents.html", **context)
 
@@ -239,6 +257,56 @@ def statistics():
         "dates": str([t[0] for t in results]),
         "amounts": str([t[1] for t in results])
     })
+
+
+@app.route("/feed")
+def feed():
+    filter_ = flask.request.args["filter"]
+    hash_ = flask.request.args["hash"]
+    # Check for all possible users who might be requesting.
+    # pylint disabled: because we do monkey-patch! [in magneticow.__main__.py:main()]
+    for username, password in app.arguments.user:  # pylint: disable=maybe-no-member
+        if generate_feed_hash(username, password, filter_) == hash_:
+            break
+    else:
+        return flask.Response(
+            "Could not verify your access level for that URL (wrong hash).\n",
+            401
+        )
+
+    context = {}
+
+    if filter_:
+        context["title"] = "`%s` - magneticow" % (filter_,)
+        with magneticod_db:
+            cur = magneticod_db.execute(
+                "SELECT "
+                "    name, "
+                "    info_hash "
+                "FROM torrents "
+                "INNER JOIN ("
+                "    SELECT docid AS id, rank(matchinfo(fts_torrents, 'pcnxal')) AS rank "
+                "    FROM fts_torrents "
+                "    WHERE name MATCH ? "
+                "    ORDER BY rank ASC"
+                "    LIMIT 50"
+                ") AS ranktable USING(id);",
+                (filter_, )
+            )
+            context["items"] = [{"title": r[0], "info_hash": r[1].hex()} for r in cur]
+    else:
+        context["title"] = "The Newest Torrents - magneticow"
+        with magneticod_db:
+            cur = magneticod_db.execute(
+                "SELECT "
+                "    name, "
+                "    info_hash "
+                "FROM torrents "
+                "ORDER BY id DESC LIMIT 50"
+            )
+            context["items"] = [{"title": r[0], "info_hash": r[1].hex()} for r in cur]
+
+    return flask.render_template("feed.xml", **context), 200, {"Content-Type": "application/rss+xml; charset=utf-8"}
 
 
 def initialize_magneticod_db() -> None:

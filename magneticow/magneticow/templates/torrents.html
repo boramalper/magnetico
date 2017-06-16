@@ -14,6 +14,10 @@
     <form action="/torrents" method="get" autocomplete="off" role="search">
         <input type="search" name="search" placeholder="Search the BitTorrent DHT" value="{{ search }}">
     </form>
+    <div>
+        <a href="{{ subscription_url }}"><img src="{{ url_for('static', filename='assets/feed.png') }}"
+                                              alt="feed icon" title="subscribe" /> subscribe</a>
+    </div>
 </header>
 <main>
     <table>
