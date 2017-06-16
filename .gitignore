@@ -176,3 +176,4 @@ ENV/
 # End of https://www.gitignore.io/api/linux,python,pycharm
 
 docker-compose.override.yml
+.mypy_cache
