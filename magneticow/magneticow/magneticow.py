@@ -322,6 +322,8 @@ def initialize_magneticod_db() -> None:
         magneticod_db.execute("PRAGMA journal_mode=WAL;")
 
         magneticod_db.execute("CREATE INDEX IF NOT EXISTS discovered_on_index ON torrents (discovered_on);")
+        magneticod_db.execute("CREATE INDEX IF NOT EXISTS info_hash_index ON torrents (info_hash);")
+        magneticod_db.execute("CREATE INDEX IF NOT EXISTS file_info_hash_index ON files (torrent_id);")
 
         magneticod_db.execute("CREATE VIRTUAL TABLE temp.fts_torrents USING fts4(name);")
         magneticod_db.execute("INSERT INTO fts_torrents (docid, name) SELECT id, name FROM torrents;")

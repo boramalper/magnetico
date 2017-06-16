@@ -50,14 +50,12 @@ class Database:
                             "total_size     INTEGER NOT NULL CHECK(total_size > 0),"
                             "discovered_on  INTEGER NOT NULL CHECK(discovered_on > 0)"
                             ");")
-            db_conn.execute("CREATE INDEX IF NOT EXISTS info_hash_index ON torrents (info_hash);")
             db_conn.execute("CREATE TABLE IF NOT EXISTS files ("
                             "id          INTEGER PRIMARY KEY,"
                             "torrent_id  INTEGER REFERENCES torrents ON DELETE CASCADE ON UPDATE RESTRICT,"
                             "size        INTEGER NOT NULL,"
                             "path        TEXT NOT NULL"
                             ");")
-            db_conn.execute("CREATE INDEX IF NOT EXISTS file_info_hash_index ON files (torrent_id);")
 
         return db_conn
 
