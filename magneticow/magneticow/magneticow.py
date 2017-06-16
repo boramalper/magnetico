@@ -317,6 +317,7 @@ def initialize_magneticod_db() -> None:
     magneticod_db_path = os.path.join(appdirs.user_data_dir("magneticod"), "database.sqlite3")
     magneticod_db = sqlite3.connect(magneticod_db_path, isolation_level=None)
 
+    logging.info("Preparing for the full-text search (this might take a while)...")
     with magneticod_db:
         magneticod_db.execute("PRAGMA journal_mode=WAL;")
 
