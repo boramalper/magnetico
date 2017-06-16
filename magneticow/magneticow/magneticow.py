@@ -188,8 +188,8 @@ def torrent_redirect(**kwargs):
     except (AssertionError, ValueError):  # In case info_hash variable is not a proper hex-encoded bytes
         return flask.abort(400)
 
-    with magnetico_db:
-        cur = magnetico_db.execute("SELECT name FROM torrents WHERE info_hash=? LIMIT 1;", (info_hash,))
+    with magneticod_db:
+        cur = magneticod_db.execute("SELECT name FROM torrents WHERE info_hash=? LIMIT 1;", (info_hash,))
         try:
             name = cur.fetchone()[0]
         except TypeError:  # In case no results returned, TypeError will be raised when we try to subscript None object
