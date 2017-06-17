@@ -181,7 +181,7 @@ class SybilNode(asyncio.DatagramProtocol):
         except (TypeError, KeyError, AssertionError):
             return
 
-        data = self.__build_GET_PEERS_query(
+        data = self.__build_GET_PEERS_response(
             info_hash[:15] + self.__true_id[:5], transaction_id, self.__calculate_token(addr, info_hash)
         )
 
@@ -213,7 +213,7 @@ class SybilNode(asyncio.DatagramProtocol):
         except (TypeError, KeyError, AssertionError):
             return
 
-        data = self.__build_ANNOUNCE_PEER_query(node_id[:15] + self.__true_id[:5], transaction_id)
+        data = self.__build_ANNOUNCE_PEER_response(node_id[:15] + self.__true_id[:5], transaction_id)
         self.sendto(data, addr)
 
         if implied_port:
@@ -359,7 +359,7 @@ class SybilNode(asyncio.DatagramProtocol):
         )
 
     @staticmethod
-    def __build_GET_PEERS_query(id_: bytes, transaction_id: bytes, token: bytes) -> bytes:  # pylint: disable=invalid-name
+    def __build_GET_PEERS_response(id_: bytes, transaction_id: bytes, token: bytes) -> bytes:  # pylint: disable=invalid-name
         """ Reference Implementation:
 
         bencode.dumps({
@@ -378,7 +378,7 @@ class SybilNode(asyncio.DatagramProtocol):
         )
 
     @staticmethod
-    def __build_ANNOUNCE_PEER_query(id_: bytes, transaction_id: bytes) -> bytes:  # pylint: disable=invalid-name
+    def __build_ANNOUNCE_PEER_response(id_: bytes, transaction_id: bytes) -> bytes:  # pylint: disable=invalid-name
         """ Reference Implementation:
 
         bencode.dumps({
