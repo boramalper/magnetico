@@ -32,7 +32,7 @@ Metadata = bytes
 
 
 class SybilNode(asyncio.DatagramProtocol):
-    def __init__(self, is_infohash_new, max_metadata_size):
+    def __init__(self, is_info_hash_new, max_metadata_size):
         self.__true_id = os.urandom(20)
 
         self._routing_table = {}  # type: typing.Dict[NodeID, NodeAddress]
@@ -42,7 +42,7 @@ class SybilNode(asyncio.DatagramProtocol):
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
         self.__parent_futures = {}  # type: typing.Dict[InfoHash, asyncio.Future]
-        self._is_inforhash_new = is_infohash_new
+        self._is_info_hash_new = is_info_hash_new
         self.__max_metadata_size = max_metadata_size
         # Complete metadatas will be added to the queue, to be retrieved and committed to the database.
         self.__metadata_queue = asyncio.Queue()  # typing.Collection[typing.Tuple[InfoHash, Metadata]]
@@ -221,7 +221,7 @@ class SybilNode(asyncio.DatagramProtocol):
         else:
             peer_addr = (addr[0], port)
 
-        if not self._is_inforhash_new(info_hash):
+        if not self._is_info_hash_new(info_hash):
             return
 
         event_loop = asyncio.get_event_loop()
