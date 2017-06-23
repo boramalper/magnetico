@@ -118,10 +118,13 @@ class SybilNode(asyncio.DatagramProtocol):
             self._routing_table.clear()
             if not self._is_writing_paused:
                 self.__n_max_neighbours = self.__n_max_neighbours * 101 // 100
-            # mypy ignore: because .child_count on Future is monkey-patched
-            logging.debug("fetch metadata task count: %d", sum(
-                x.child_count for x in self.__parent_futures.values()))  # type: ignore
-            logging.debug("asyncio task count: %d", len(asyncio.Task.all_tasks()))
+            
+            # Computation of Task.all_tasks() is heavy, so don't do it.
+            if logging.root.isEnabledFor(logging.DEBUG):
+                # mypy ignore: because .child_count on Future is monkey-patched
+                logging.debug("fetch metadata task count: %d", sum(
+                    x.child_count for x in self.__parent_futures.values()))  # type: ignore
+                logging.debug("asyncio task count: %d", len(asyncio.Task.all_tasks()))
 
     def datagram_received(self, data, addr) -> None:
         # Ignore nodes that "uses" port 0, as we cannot communicate with them reliably across the different systems.
