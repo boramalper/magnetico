@@ -13,10 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
 import collections
-import functools
 import datetime as dt
 from datetime import datetime
-import hashlib
 import logging
 import sqlite3
 import os
@@ -25,6 +23,7 @@ import appdirs
 import flask
 
 from magneticow import utils
+from magneticow.authorization import requires_auth, generate_feed_hash
 
 
 File = collections.namedtuple("file", ["path", "size"])
@@ -37,51 +36,6 @@ app.config.from_object(__name__)
 # TODO: We should have been able to use flask.g but it does NOT persist across different requests so we resort back to
 # this. Investigate the cause and fix it (I suspect of Gevent).
 magneticod_db = None
-
-
-# Adapted from: http://flask.pocoo.org/snippets/8/
-# (c) Copyright 2010 - 2017 by Armin Ronacher
-# BEGINNING OF THE COPYRIGHTED CONTENT
-def is_authorized(supplied_username, supplied_password):
-    """ This function is called to check if a username / password combination is valid. """
-    # Because we do monkey-patch! [in magneticow.__main__.py:main()]
-    for username, password in app.arguments.user:  # pylint: disable=maybe-no-member
-        if supplied_username == username and supplied_password == password:
-            return True
-    return False
-
-
-def authenticate():
-    """ Sends a 401 response that enables basic auth. """
-    return flask.Response(
-        "Could not verify your access level for that URL.\n"
-        "You have to login with proper credentials",
-        401,
-        {"WWW-Authenticate": 'Basic realm="Login Required"'}
-    )
-
-
-def requires_auth(f):
-    @functools.wraps(f)
-    def decorated(*args, **kwargs):
-        auth = flask.request.authorization
-        if not auth or not is_authorized(auth.username, auth.password):
-            return authenticate()
-        return f(*args, **kwargs)
-    return decorated
-# END OF THE COPYRIGHTED CONTENT
-
-
-def generate_feed_hash(username: str, password: str, filter_: str) -> str:
-    """
-    Deterministically generates the feed hash from given username, password, and filter.
-    Hash is the hex encoding of the SHA256 sum.
-    :param username:
-    :param password:
-    :param filter_:
-    :return:
-    """
-    return hashlib.sha256((username + "\0" + password + "\0" + filter_).encode()).digest().hex()
 
 @app.route("/")
 @requires_auth
@@ -97,16 +51,7 @@ def home_page():
 @app.route("/torrents/")
 @requires_auth
 def torrents():
-    if flask.request.args:
-        if flask.request.args["search"] == "":
-            return newest_torrents()
-        return search_torrents()
-    else:
-        return newest_torrents()
-
-
-def search_torrents():
-    search = flask.request.args["search"]
+    search = flask.request.args.get("search")
     page = int(flask.request.args.get("page", 0))
 
     context = {
@@ -114,23 +59,56 @@ def search_torrents():
         "page": page
     }
 
+    SQL_query = """
+        SELECT
+            info_hash,
+            name,
+            total_size,
+            discovered_on
+        FROM torrents
+    """
+    if search:
+        SQL_query += """
+            INNER JOIN (
+                SELECT docid AS id, rank(matchinfo(fts_torrents, 'pcnxal')) AS rank
+                FROM fts_torrents
+                WHERE name MATCH ?
+            ) AS ranktable USING(id)
+        """
+    SQL_query += """
+        ORDER BY {}
+        LIMIT 20 OFFSET ?
+    """
+
+    sort_by = flask.request.args.get("sort_by")
+    allowed_sorts = [
+        None,
+        "name ASC",
+        "name DESC",
+        "total_size ASC",
+        "total_size DESC",
+        "discovered_on ASC",
+        "discovered_on DESC"
+    ]
+    if sort_by not in allowed_sorts:
+        return flask.Response("Invalid value for `sort_by! (Allowed values are %s)" % (allowed_sorts, ), 400)
+
+    if search:
+        if sort_by:
+            SQL_query = SQL_query.format(sort_by + ", " + "rank ASC")
+        else:
+            SQL_query = SQL_query.format("rank ASC")
+    else:
+        if sort_by:
+            SQL_query = SQL_query.format(sort_by + ", " + "id DESC")
+        else:
+            SQL_query = SQL_query.format("id DESC")
+
     with magneticod_db:
-        cur = magneticod_db.execute(
-            "SELECT"
-            "    info_hash, "
-            "    name, "
-            "    total_size, "
-            "    discovered_on "
-            "FROM torrents "
-            "INNER JOIN ("
-            "    SELECT docid AS id, rank(matchinfo(fts_torrents, 'pcnxal')) AS rank "
-            "    FROM fts_torrents "
-            "    WHERE name MATCH ? "
-            "    ORDER BY rank ASC"
-            "    LIMIT 20 OFFSET ?"
-            ") AS ranktable USING(id);",
-            (search, 20 * page)
-        )
+        if search:
+            cur = magneticod_db.execute(SQL_query, (search, 20 * page))
+        else:
+            cur = magneticod_db.execute(SQL_query, (20 * page, ))
         context["torrents"] = [Torrent(t[0].hex(), t[1], utils.to_human_size(t[2]),
                                        datetime.fromtimestamp(t[3]).strftime("%d/%m/%Y"), [])
                                for t in cur.fetchall()]
@@ -143,38 +121,8 @@ def search_torrents():
     username, password = flask.request.authorization.username, flask.request.authorization.password
     context["subscription_url"] = "/feed?filter=%s&hash=%s" % (search, generate_feed_hash(username, password, search))
 
-    return flask.render_template("torrents.html", **context)
-
-
-def newest_torrents():
-    page = int(flask.request.args.get("page", 0))
-
-    context = {
-        "page": page
-    }
-
-    with magneticod_db:
-        cur = magneticod_db.execute(
-            "SELECT "
-            "  info_hash, "
-            "  name, "
-            "  total_size, "
-            "  discovered_on "
-            "FROM torrents "
-            "ORDER BY id DESC LIMIT 20 OFFSET ?",
-            (20 * page,)
-        )
-        context["torrents"] = [Torrent(t[0].hex(), t[1], utils.to_human_size(t[2]), datetime.fromtimestamp(t[3]).strftime("%d/%m/%Y"), [])
-                               for t in cur.fetchall()]
-
-    # noinspection PyTypeChecker
-    if len(context["torrents"]) < 20:
-        context["next_page_exists"] = False
-    else:
-        context["next_page_exists"] = True
-
-    username, password = flask.request.authorization.username, flask.request.authorization.password
-    context["subscription_url"] = "/feed?filter=&hash=%s" % (generate_feed_hash(username, password, ""),)
+    if sort_by:
+        context["sorted_by"] = sort_by
 
     return flask.render_template("torrents.html", **context)
 
