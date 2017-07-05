@@ -144,6 +144,45 @@ many GNU/Linux distributions):
 4. If you wish to see the logs, or to kill **magneticow**, ``screen -r magneticow`` will attach the original screen
    session back. **magneticow** will exit gracefully upon keyboard interrupt (Ctrl+C) [SIGINT].
 
+Searching
+---------
+* Only the **titles** of the torrents are being searched.
+* Search is case-insensitive.
+* Titles that includes terms that are separated by space are returned from the search:
+
+  Example: ``king bad`` returns ``Stephen King - The Bazaar of Bad Dreams``
+
+  * If you would like terms to appear in the exact order you wrote them, enclose them in double quotes:
+
+    Example: ``"king bad"`` returns ``George Benson - Good King Bad``
+* Use asteriks (``*``) to denote prefixes:
+
+  Example: ``The Godf*`` returns ``Francis Ford Coppola - The Godfather``
+
+  Asteriks works inside the double quotes too!
+* Use caret (``^``) to indicate that the term it prefixes must be the first word in the title:
+
+  Example: ``linux`` returns ``Arch Linux`` while ``^linux`` would return ``Linux Mint``
+
+  * Caret works **inside** the double quotes **but not outside**:
+
+    Right: ``"^ubuntu linux"``
+
+    Wrong: ``^"ubuntu linux"``
+* You can use ``AND``, ``OR`` and ``NOT`` and also parentheses for more complex queries:
+
+  Example: ``programming NOT (windows OR "os x" OR macos)``
+
+  Beware that the terms are all-caps and MUST be so.
+
+  =======================    =======================================
+  Operator Enhanced Query    Syntax Precedence
+  =======================    =======================================
+  NOT                        Highest precedence (tightest grouping).
+  AND
+  OR                         Lowest precedence (loosest grouping).
+  =======================    =======================================
+
 REST-ful HTTP API
 =================
     **magneticow** offers a REST-ful HTTP API for 3rd-party applications to interact with **magnetico** setups. Examples
