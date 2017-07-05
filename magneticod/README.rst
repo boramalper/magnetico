@@ -79,8 +79,8 @@ Instructions
        iptables -I OUTPUT -t raw -p udp --sport PORT_NUMBER -j NOTRACK
        iptables -I PREROUTING -t raw -p udp --dport PORT_NUMBER -j NOTRACK
 
-    This is to prevent excessive number of ``EPERM`` "Operation not permitted" errors, which also has a negative impact
-    on the performance.
+   This is to prevent excessive number of ``EPERM`` "Operation not permitted" errors, which also has a negative impact
+   on the performance.
 
 8. Start **magneticod**: ::
 
