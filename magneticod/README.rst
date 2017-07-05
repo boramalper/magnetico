@@ -74,7 +74,7 @@ Instructions
 
 7. Start **magneticod**: ::
 
-       systemctl --user start magneticod
+       systemctl --user enable magneticod --now
 
    **magneticod** should now be running under the supervision of systemd and it should also be automatically started
    whenever you boot your machine.

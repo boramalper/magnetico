@@ -91,7 +91,7 @@ Instructions
 
 7. Start **magneticow**: ::
 
-       systemctl --user start magneticow
+       systemctl --user enable magneticow --now
 
    **magneticow** should now be running under the supervision of systemd and it should also be automatically started
    whenever you boot your machine.
