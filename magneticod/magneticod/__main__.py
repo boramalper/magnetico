@@ -31,17 +31,6 @@ from . import dht
 from . import persistence
 
 
-async def metadata_queue_watcher(database: persistence.Database, metadata_queue: asyncio.Queue) -> None:
-    """
-     Watches for the metadata queue to commit any complete info hashes to the database.
-    """
-    while True:
-        info_hash, metadata = await metadata_queue.get()
-        succeeded = database.add_metadata(info_hash, metadata)
-        if not succeeded:
-            logging.info("Corrupt metadata for %s! Ignoring.", info_hash.hex())
-
-
 def parse_ip_port(netloc: str) -> typing.Optional[typing.Tuple[str, int]]:
     # In case no port supplied
     try:
@@ -140,17 +129,14 @@ def main() -> int:
         return 1
 
     loop = asyncio.get_event_loop()
-    node = dht.SybilNode(database.is_infohash_new, arguments.max_metadata_size)
+    node = dht.SybilNode(database, arguments.max_metadata_size)
     loop.create_task(node.launch(arguments.node_addr))
-    # mypy ignored: mypy doesn't know (yet) about coroutines
-    metadata_queue_watcher_task = loop.create_task(metadata_queue_watcher(database, node.metadata_q()))  # type: ignore
 
     try:
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         logging.critical("Keyboard interrupt received! Exiting gracefully...")
     finally:
-        metadata_queue_watcher_task.cancel()
         loop.run_until_complete(node.shutdown())
         database.close()
 

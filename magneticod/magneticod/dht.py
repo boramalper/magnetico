@@ -23,6 +23,7 @@ import os
 from .constants import BOOTSTRAPPING_NODES, MAX_ACTIVE_PEERS_PER_INFO_HASH, PEER_TIMEOUT, TICK_INTERVAL
 from . import bencode
 from . import bittorrent
+from . import persistence
 
 NodeID = bytes
 NodeAddress = typing.Tuple[str, int]
@@ -32,7 +33,7 @@ Metadata = bytes
 
 
 class SybilNode(asyncio.DatagramProtocol):
-    def __init__(self, is_info_hash_new, max_metadata_size):
+    def __init__(self, database: persistence.Database, max_metadata_size):
         self.__true_id = os.urandom(20)
 
         self._routing_table = {}  # type: typing.Dict[NodeID, NodeAddress]
@@ -42,7 +43,7 @@ class SybilNode(asyncio.DatagramProtocol):
         # stop; but until then, the total number of neighbours might exceed the threshold).
         self.__n_max_neighbours = 2000
         self.__parent_futures = {}  # type: typing.Dict[InfoHash, asyncio.Future]
-        self._is_info_hash_new = is_info_hash_new
+        self.__database = database
         self.__max_metadata_size = max_metadata_size
         # Complete metadatas will be added to the queue, to be retrieved and committed to the database.
         self.__metadata_queue = asyncio.Queue()  # typing.Collection[typing.Tuple[InfoHash, Metadata]]
@@ -289,13 +290,17 @@ class SybilNode(asyncio.DatagramProtocol):
             parent_task.set_result(None)
 
     def _parent_task_done(self, parent_task, info_hash):
+        del self.__parent_futures[info_hash]
         try:
             metadata = parent_task.result()
-            if metadata:
-                self.__metadata_queue.put_nowait((info_hash, metadata))
+            if not metadata:
+                return
         except asyncio.CancelledError:
-            pass
-        del self.__parent_futures[info_hash]
+            return
+
+        succeeded = self.__database.add_metadata(info_hash, metadata)
+        if not succeeded:
+            logging.info("Corrupt metadata for %s! Ignoring.", info_hash.hex())
 
     async def __bootstrap(self) -> None:
         event_loop = asyncio.get_event_loop()
