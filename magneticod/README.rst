@@ -74,11 +74,13 @@ Instructions
 
    You might need to create intermediate directories (``.config``, ``systemd``, and ``user``) if not exists.
 
-7. (Optional, **requires root**) Disable iptables on a specified port for UDP protocol to prevent excessive number of
-   `EPERM` (errno 1, "Operation not permitted") errors, which also affect the performance: ::
+7. (Optional, **requires root**) Disable iptables for a specified port: ::
 
-   iptables -I OUTPUT -t raw -p udp --sport PORT_NUMBER -j NOTRACK
-   iptables -I PREROUTING -t raw -p udp --dport PORT_NUMBER -j NOTRACK
+       iptables -I OUTPUT -t raw -p udp --sport PORT_NUMBER -j NOTRACK
+       iptables -I PREROUTING -t raw -p udp --dport PORT_NUMBER -j NOTRACK
+
+    This is to prevent excessive number of ``EPERM`` "Operation not permitted" errors, which also has a negative impact
+    on the performance.
 
 8. Start **magneticod**: ::
 
