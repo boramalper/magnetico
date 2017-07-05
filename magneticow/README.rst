@@ -38,8 +38,8 @@ Instructions
 
        pip3 install magneticow --user
 
-2. Add installation path to the ``$PATH``; append the following line to your ``~/.profile`` *(you can skip to step 4 if
-   you installed magneticod first as advised)* ::
+2. Add installation path to the ``$PATH``; append the following line to your ``~/.profile`` if you are using bash
+   *(you can skip to step 4 if you installed magneticod first as advised)* ::
 
        export PATH=$PATH:~/.local/bin
        
@@ -47,7 +47,7 @@ Instructions
    
         export PATH="${PATH}:${HOME}/Library/Python/3.5/bin/"
 
-3. Activate the changes to ``$PATH``: ::
+3. Activate the changes to ``$PATH`` (again, if you are using bash): ::
 
        source ~/.profile
 

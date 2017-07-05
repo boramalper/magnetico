@@ -31,15 +31,15 @@ Instructions
 
        pip3 install magneticod --user
 
-2. Add installation path to the ``$PATH``; append the following line to your ``~/.profile`` ::
+2. Add installation path to the ``$PATH``; append the following line to your ``~/.profile`` if you are using bash ::
 
        export PATH=$PATH:~/.local/bin
        
-   **or if you are on macOS**, (assuming that you are using Python 3.5): ::
+   **or if you are on macOS** and using bash, (assuming that you are using Python 3.5): ::
    
         export PATH="${PATH}:${HOME}/Library/Python/3.5/bin/"
 
-3. Activate the changes to ``$PATH``: ::
+3. Activate the changes to ``$PATH`` (again, if you are using bash): ::
 
        source ~/.profile
 
@@ -55,16 +55,18 @@ Instructions
 
    Download the magneticod systemd service file (at
    `magneticod/systemd/magneticod.service <systemd/magneticod.service>`_) and change the tilde symbol with
-   the path of your home directory. For example, if my username is ``bora``, this line ::
+   the path of your home directory, and the ``PORT_NUMBER`` with the preferred port number. For example, if my username
+   is ``bora`` and I prefer the port 64879, this line ::
 
-       ExecStart=~/.local/bin/magneticod
+       ExecStart=~/.local/bin/magneticod magneticod --node-addr 0.0.0.0:PORT_NUMBER
 
    should become this: ::
 
-       ExecStart=/home/bora/.local/bin/magneticod
+       ExecStart=/home/bora/.local/bin/magneticod --node-addr 0.0.0.0:64879
 
-   Here, tilde (``~``) is replaced with ``/home/bora``. Run ``echo ~`` to see the path of your own home directory, if
-   you do not already know.
+   Here, tilde (``~``) is replaced with ``/home/bora`` and the ``PORT_NUMBER`` with 64879. Run ``echo ~`` to see the
+   path of your own home directory, if you do not already know. Port numbers above 1000 typically do not require
+   special permissions.
 
 6. Copy the magneticod systemd service file to your local systemd configuration directory: ::
 
@@ -72,7 +74,13 @@ Instructions
 
    You might need to create intermediate directories (``.config``, ``systemd``, and ``user``) if not exists.
 
-7. Start **magneticod**: ::
+7. (Optional, **requires root**) Disable iptables on a specified port for UDP protocol to prevent excessive number of
+   `EPERM` (errno 1, "Operation not permitted") errors, which also affect the performance: ::
+
+   iptables -I OUTPUT -t raw -p udp --sport PORT_NUMBER -j NOTRACK
+   iptables -I PREROUTING -t raw -p udp --dport PORT_NUMBER -j NOTRACK
+
+8. Start **magneticod**: ::
 
        systemctl --user enable magneticod --now
 

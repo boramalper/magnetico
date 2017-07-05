@@ -2,7 +2,7 @@
 Description=magneticod: autonomous BitTorrent DHT crawler and metadata fetcher
 
 [Service]
-ExecStart=~/.local/bin/magneticod
+ExecStart=~/.local/bin/magneticod --node-addr 0.0.0.0:PORT_NUMBER
 Restart=always
 RestartSec=5
 
