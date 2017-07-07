@@ -45,15 +45,10 @@ class SybilNode(asyncio.DatagramProtocol):
         self.__parent_futures = {}  # type: typing.Dict[InfoHash, asyncio.Future]
         self.__database = database
         self.__max_metadata_size = max_metadata_size
-        # Complete metadatas will be added to the queue, to be retrieved and committed to the database.
-        self.__metadata_queue = asyncio.Queue()  # typing.Collection[typing.Tuple[InfoHash, Metadata]]
         self._is_writing_paused = False
         self._tick_task = None
 
         logging.info("SybilNode %s initialized!", self.__true_id.hex().upper())
-
-    def metadata_q(self):
-        return self.__metadata_queue
 
     async def launch(self, address):
         await asyncio.get_event_loop().create_datagram_endpoint(lambda: self, local_addr=address)
