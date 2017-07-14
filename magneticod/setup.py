@@ -11,7 +11,8 @@ def run_setup():
     install_requirements = [
         "appdirs >= 1.4.3",
         "humanfriendly",
-        "better_bencode >= 0.2.1"
+        "better_bencode >= 0.2.1",
+        "cerberus >= 1.1"
     ]
 
     if sys.platform in ["linux", "darwin"]:
