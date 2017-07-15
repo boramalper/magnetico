@@ -14,7 +14,6 @@
 # <http://www.gnu.org/licenses/>.
 import asyncio
 import enum
-import functools
 import typing
 
 import cerberus
@@ -23,47 +22,54 @@ from . import transport
 
 
 class Protocol:
-    def __init__(self, *, client_version: bytes=b"mc00"):
-        self.client_version = client_version
-        self.transport = transport.Transport()
+    def __init__(self, client_version: bytes):
+        self._client_version = client_version
+        self._transport = transport.Transport()
 
-        self.transport.on_message = functools.partial(self.__when_message, self)
+        self._transport.on_message = self.__when_message
 
     async def launch(self, address: transport.Address):
-        await asyncio.get_event_loop().create_datagram_endpoint(lambda: self.transport, local_addr=address)
+        await asyncio.get_event_loop().create_datagram_endpoint(lambda: self._transport, local_addr=address)
 
     # Offered Functionality
     # =====================
+    def make_query(self, query: BaseQuery, address: transport.Address) -> None:
+        return self._transport.send_message(query.to_message(b"\0\0", self._client_version), address)
+
     @staticmethod
-    def on_ping_query(query: PingQuery) -> typing.Optional[typing.Union[PingResponse, Error]]:
+    def on_ping_query(query: PingQuery, address: transport.Address) \
+    -> typing.Optional[typing.Union[PingResponse, Error]]:
         pass
 
     @staticmethod
-    def on_find_node_query(query: FindNodeQuery) -> typing.Optional[typing.Union[FindNodeResponse, Error]]:
+    def on_find_node_query(query: FindNodeQuery, address: transport.Address) \
+    -> typing.Optional[typing.Union[FindNodeResponse, Error]]:
         pass
 
     @staticmethod
-    def on_get_peers_query(query: GetPeersQuery) -> typing.Optional[typing.Union[GetPeersQuery, Error]]:
+    def on_get_peers_query(query: GetPeersQuery, address: transport.Address) \
+    -> typing.Optional[typing.Union[GetPeersResponse, Error]]:
         pass
 
     @staticmethod
-    def on_announce_peer_query(query: AnnouncePeerQuery) -> typing.Optional[typing.Union[AnnouncePeerResponse, Error]]:
+    def on_announce_peer_query(query: AnnouncePeerQuery, address: transport.Address) \
+    -> typing.Optional[typing.Union[AnnouncePeerResponse, Error]]:
         pass
 
     @staticmethod
-    def on_ping_OR_announce_peer_response(response: PingResponse) -> None:
+    def on_ping_OR_announce_peer_response(response: PingResponse, address: transport.Address) -> None:
         pass
 
     @staticmethod
-    def on_find_node_response(response: FindNodeResponse) -> None:
+    def on_find_node_response(response: FindNodeResponse, address: transport.Address) -> None:
         pass
 
     @staticmethod
-    def on_get_peers_response(response: GetPeersResponse) -> None:
+    def on_get_peers_response(response: GetPeersResponse, address: transport.Address) -> None:
         pass
 
     @staticmethod
-    def on_error(error: Error) -> None:
+    def on_error(error: Error, address: transport.Address) -> None:
         pass
 
     # Private Functionality
@@ -79,18 +85,18 @@ class Protocol:
             if AnnouncePeerQuery.validate_message(message):
                 response = self.on_announce_peer_query(AnnouncePeerQuery(
                     args[b"id"], args[b"info_hash"], args[b"port"], args[b"token"], args[b"implied_port"]
-                ))
+                ), address)
             elif GetPeersQuery.validate_message(message):
-                response = self.on_get_peers_query(GetPeersQuery(args[b"id"], args[b"info_hash"]))
+                response = self.on_get_peers_query(GetPeersQuery(args[b"id"], args[b"info_hash"]), address)
             elif FindNodeQuery.validate_message(message):
-                response = self.on_find_node_query(FindNodeQuery(args[b"id"], args[b"target"]))
+                response = self.on_find_node_query(FindNodeQuery(args[b"id"], args[b"target"]), address)
             elif PingQuery.validate_message(message):
-                response = self.on_ping_query(PingQuery(args[b"id"]))
+                response = self.on_ping_query(PingQuery(args[b"id"]), address)
             else:
                 # Unknown Query received!
                 response = None
             if response:
-                self.transport.send_message(response.to_message(message[b"t"], self.client_version), address)
+                self._transport.send_message(response.to_message(message[b"t"], self._client_version), address)
 
         elif BaseResponse.validate_message(message):
             return_values = message[b"r"]
@@ -98,22 +104,22 @@ class Protocol:
                 if b"nodes" in return_values:
                     self.on_get_peers_response(GetPeersResponse(
                         return_values[b"id"], return_values[b"token"], nodes=return_values[b"nodes"]
-                    ))
+                    ), address)
                 else:
                     self.on_get_peers_response(GetPeersResponse(
                         return_values[b"id"], return_values[b"token"], values=return_values[b"values"]
-                    ))
+                    ), address)
             elif FindNodeResponse.validate_message(message):
-                self.on_find_node_response(FindNodeResponse(return_values[b"id"], return_values[b"nodes"]))
+                self.on_find_node_response(FindNodeResponse(return_values[b"id"], return_values[b"nodes"]), address)
             elif PingResponse.validate_message(message):
-                self.on_ping_OR_announce_peer_response(PingResponse(return_values[b"id"]))
+                self.on_ping_OR_announce_peer_response(PingResponse(return_values[b"id"]), address)
             else:
                 # Unknown Response received!
                 pass
 
         elif Error.validate_message(message):
             if Error.validate_message(message):
-                self.on_error(Error(message[b"e"][0], message[b"e"][1]))
+                self.on_error(Error(message[b"e"][0], message[b"e"][1]), address)
             else:
                 # Erroneous Error received!
                 pass
@@ -308,11 +314,11 @@ class GetPeersResponse(BaseResponse):
     }
     __validator = cerberus.Validator()
 
-    def __init__(self, id_: NodeID, token: bytes, *, values: typing.Optional[typing.List[bytes]]=None,
+    def __init__(self, id_: NodeID, token: bytes, *, values: typing.Optional[typing.List[transport.Address]]=None,
                  nodes: typing.Optional[typing.List[NodeInfo]]=None
     ):
-        if not bool(values) ^ bool(nodes):
-            raise ValueError("Supply either `values` or `nodes` but not both or neither.")
+        if not (values and nodes):
+            raise ValueError("Supply either `values` or `nodes` or neither but not both.")
 
         super().__init__(id_)
         self.token = token

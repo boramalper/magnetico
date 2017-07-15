@@ -42,18 +42,18 @@ class Transport(asyncio.DatagramProtocol):
 
     def __init__(self):
         super().__init__()
-        self.__datagram_transport = asyncio.DatagramTransport()
-        self.__write_allowed = asyncio.Event()
-        self.__queue_nonempty = asyncio.Event()
-        self.__message_queue = collections.deque()  # type: typing.Deque[MessageQueueEntry]
-        self.__messenger_task = asyncio.Task(self.__send_messages())
+        self._datagram_transport = asyncio.DatagramTransport()
+        self._write_allowed = asyncio.Event()
+        self._queue_nonempty = asyncio.Event()
+        self._message_queue = collections.deque()  # type: typing.Deque[MessageQueueEntry]
+        self._messenger_task = asyncio.Task(self._send_messages())
 
     # Offered Functionality
     # =====================
     def send_message(self, message, address: Address) -> None:
-        self.__message_queue.append(MessageQueueEntry(time.monotonic(), message, address))
-        if not self.__queue_nonempty.is_set():
-            self.__queue_nonempty.set()
+        self._message_queue.append(MessageQueueEntry(time.monotonic(), message, address))
+        if not self._queue_nonempty.is_set():
+            self._queue_nonempty.set()
 
     @staticmethod
     def on_message(message: dict, address: Address):
@@ -62,10 +62,15 @@ class Transport(asyncio.DatagramProtocol):
     # Private Functionality
     # =====================
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:
-        self.__datagram_transport = transport
-        self.__write_allowed.set()
+        self._datagram_transport = transport
+        self._write_allowed.set()
 
     def datagram_received(self, data: bytes, address: Address) -> None:
+        # Ignore nodes that "uses" port 0, as we cannot communicate with them reliably across the different systems.
+        # See https://tools.cisco.com/security/center/viewAlert.x?alertId=19935 for slightly more details
+        if address[1] == 0:
+            return
+
         try:
             message = codec.decode(data)
         except codec.EncodeError:
@@ -80,10 +85,10 @@ class Transport(asyncio.DatagramProtocol):
         logging.debug("Mainline DHT received error!", exc_info=exc)
 
     def pause_writing(self):
-        self.__write_allowed.clear()
+        self._write_allowed.clear()
 
     def resume_writing(self):
-        self.__write_allowed.set()
+        self._write_allowed.set()
 
     def connection_lost(self, exc: Exception):
         if exc:
@@ -94,16 +99,16 @@ class Transport(asyncio.DatagramProtocol):
             logging.fatal("Mainline DHT lost connection!")
         sys.exit(1)
 
-    async def __send_messages(self) -> None:
+    async def _send_messages(self) -> None:
         while True:
-            await asyncio.wait([self.__write_allowed.wait(), self.__queue_nonempty.wait()])
+            await asyncio.wait([self._write_allowed.wait(), self._queue_nonempty.wait()])
             try:
-                queued_on, message, address = self.__message_queue.pop()
+                queued_on, message, address = self._message_queue.pop()
             except IndexError:
-                self.__queue_nonempty.clear()
+                self._queue_nonempty.clear()
                 continue
 
             if time.monotonic() - queued_on > 60:
                 return
 
-            self.__datagram_transport.sendto(message, address)
+            self._datagram_transport.sendto(message, address)
