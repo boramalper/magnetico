@@ -24,8 +24,8 @@ from . import codec
 Address = typing.Tuple[str, int]
 
 MessageQueueEntry = typing.NamedTuple("MessageQueueEntry", [
-    ("queued_on", float),
-    ("message", bytes),
+    ("queued_on", int),
+    ("message", codec.Message),
     ("address", Address)
 ])
 
@@ -50,13 +50,13 @@ class Transport(asyncio.DatagramProtocol):
 
     # Offered Functionality
     # =====================
-    def send_message(self, message, address: Address) -> None:
-        self._message_queue.append(MessageQueueEntry(time.monotonic(), message, address))
+    def send_message(self, message: codec.Message, address: Address) -> None:
+        self._message_queue.append(MessageQueueEntry(int(time.monotonic()), message, address))
         if not self._queue_nonempty.is_set():
             self._queue_nonempty.set()
 
     @staticmethod
-    def on_message(message: dict, address: Address):
+    def on_message(message: codec.Message, address: Address):
         pass
 
     # Private Functionality
@@ -73,7 +73,7 @@ class Transport(asyncio.DatagramProtocol):
 
         try:
             message = codec.decode(data)
-        except codec.EncodeError:
+        except codec.DecodeError:
             return
 
         if not isinstance(message, dict):
@@ -111,4 +111,4 @@ class Transport(asyncio.DatagramProtocol):
             if time.monotonic() - queued_on > 60:
                 return
 
-            self._datagram_transport.sendto(message, address)
+            self._datagram_transport.sendto(codec.encode(message), address)

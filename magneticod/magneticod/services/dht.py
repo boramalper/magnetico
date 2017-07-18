@@ -22,7 +22,7 @@ from magneticod import constants
 from . import protocol
 
 
-class TrawlingService:
+class PeerService:
     def __init__(self):
         self._protocol = protocol.Protocol(b"mc00")
 
@@ -34,18 +34,21 @@ class TrawlingService:
         self._token_secret = os.urandom(4)
         self._routing_table = {}  # typing.Dict[protocol.NodeID, protocol.transport.Address]
 
+        self._tick_task = None
+
     async def launch(self, address: protocol.transport.Address):
         await self._protocol.launch(address)
+        self._tick_task = asyncio.ensure_future(self._tick_periodically())
 
     # Offered Functionality
     # =====================
     @staticmethod
-    def on_info_hash_and_peer(info_hash: protocol.InfoHash, address: protocol.transport.Address) -> None:
+    def on_peer(info_hash: protocol.InfoHash, address: protocol.transport.Address) -> None:
         pass
 
     # Private Functionality
     # =====================
-    async def tick_periodically(self) -> None:
+    async def _tick_periodically(self) -> None:
         while True:
             if not self._routing_table:
                 await self._bootstrap()

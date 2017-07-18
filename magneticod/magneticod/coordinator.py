@@ -12,8 +12,31 @@
 #
 # You should have received a copy of the GNU Affero General Public License along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
+import asyncio
+
+from .dht import mainline
+from . import bittorrent
 
 
-class InfoHashSink:
+class Coordinator:
     def __init__(self):
+        self._peer_service = mainline.service.PeerService()
+
+        self._metadata_service_tasks = {}
+
+    async def run(self):
+        await self._peer_service.launch(("0.0.0.0", 0))
+
+    # Private Functionality
+    # =====================
+    def _when_peer(self, info_hash: mainline.protocol.InfoHash, address: mainline.transport.Address) \
+    -> None:
+        if info_hash in self._metadata_service_tasks:
+            return
+
+        self._metadata_service_tasks[info_hash] = asyncio.ensure_future()
+
+
+
+    def _when_metadata(self, info_hash: mainline.protocol.InfoHash, address: mainline.transport.Address) -> None:
         pass

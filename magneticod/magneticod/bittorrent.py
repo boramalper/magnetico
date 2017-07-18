@@ -61,7 +61,7 @@ class DisposablePeer:
 
         try:
             self._reader, self._writer = await asyncio.open_connection(*self.__peer_addr, loop=event_loop)  # type: ignore
-            # Send the BitTorrent handshake message (0x13 = 19 in decimal, the length of the handshake message)
+            # Send the BitTorrent initiate_the_bittorrent_handshake message (0x13 = 19 in decimal, the length of the initiate_the_bittorrent_handshake message)
             self._writer.write(b"\x13BitTorrent protocol%s%s%s" % (  # type: ignore
                 b"\x00\x00\x00\x00\x00\x10\x00\x01",
                 self.__info_hash,
@@ -70,13 +70,13 @@ class DisposablePeer:
             # Honestly speaking, BitTorrent protocol might be one of the most poorly documented and (not the most but)
             # badly designed protocols I have ever seen (I am 19 years old so what I could have seen?).
             #
-            # Anyway, all the messages EXCEPT the handshake are length-prefixed by 4 bytes in network order, BUT the
-            # size of the handshake message is the 1-byte length prefix + 49 bytes, but luckily, there is only one
+            # Anyway, all the messages EXCEPT the initiate_the_bittorrent_handshake are length-prefixed by 4 bytes in network order, BUT the
+            # size of the initiate_the_bittorrent_handshake message is the 1-byte length prefix + 49 bytes, but luckily, there is only one
             # canonical way of handshaking in the wild.
             message = await self._reader.readexactly(68)
             if message[1:20] != b"BitTorrent protocol":
-                # Erroneous handshake, possibly unknown version...
-                raise ProtocolError("Erroneous BitTorrent handshake!  %s" % message)
+                # Erroneous initiate_the_bittorrent_handshake, possibly unknown version...
+                raise ProtocolError("Erroneous BitTorrent initiate_the_bittorrent_handshake!  %s" % message)
 
             self.__on_bt_handshake(message)
 
@@ -114,7 +114,7 @@ class DisposablePeer:
         self.__on_ext_message(message[2:])
 
     def __on_bt_handshake(self, message: bytes) -> None:
-        """ on BitTorrent Handshake... send the extension handshake! """
+        """ on BitTorrent Handshake... send the extension initiate_the_bittorrent_handshake! """
         if message[25] != 16:
             logging.info("Peer does NOT support the extension protocol")
 
@@ -125,7 +125,7 @@ class DisposablePeer:
         })
         # In case you cannot read hex:
         #   0x14 = 20  (BitTorrent ID indicating that it's an extended message)
-        #   0x00 =  0  (Extension ID indicating that it's the handshake message)
+        #   0x00 =  0  (Extension ID indicating that it's the initiate_the_bittorrent_handshake message)
         self._writer.write(b"%b\x14%s" % (  # type: ignore
             (2 + len(msg_dict_dump)).to_bytes(4, "big"),
             b'\0' + msg_dict_dump
@@ -140,7 +140,7 @@ class DisposablePeer:
         except bencode.BencodeDecodingError:
             # One might be tempted to close the connection, but why care? Any DisposableNode will be disposed
             # automatically anyway (after a certain amount of time if the metadata is still not complete).
-            logging.debug("Could NOT decode extension handshake message! %s", message[:200])
+            logging.debug("Could NOT decode extension initiate_the_bittorrent_handshake message! %s", message[:200])
             return
 
         try:
@@ -166,7 +166,7 @@ class DisposablePeer:
         self.__metadata_size = metadata_size
         self.__ext_handshake_complete = True
 
-        # After the handshake is complete, request all the pieces of metadata
+        # After the initiate_the_bittorrent_handshake is complete, request all the pieces of metadata
         n_pieces = math.ceil(self.__metadata_size / (2 ** 14))
         for piece in range(n_pieces):
             self.__request_metadata_piece(piece)
