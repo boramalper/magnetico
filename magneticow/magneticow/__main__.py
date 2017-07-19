@@ -29,7 +29,7 @@ def main() -> int:
     arguments = parse_args()
     magneticow.app.arguments = arguments
 
-    http_server = gevent.wsgi.WSGIServer(("", arguments.port), magneticow.app)
+    http_server = gevent.wsgi.WSGIServer((arguments.host, arguments.port), magneticow.app)
 
     magneticow.initialize_magneticod_db()
 
@@ -66,6 +66,10 @@ def parse_args() -> argparse.Namespace:
         """),
         allow_abbrev=False,
         formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--host", action="store", type=str, required=False, default="",
+        help="the host address magneticow web server should listen on"
     )
     parser.add_argument(
         "--port", action="store", type=int, required=True,
