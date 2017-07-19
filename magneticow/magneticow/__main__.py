@@ -71,8 +71,15 @@ def parse_args() -> argparse.Namespace:
         "--port", action="store", type=int, required=True,
         help="the port number magneticow web server should listen on"
     )
-    parser.add_argument(
-        "--user", action="append", nargs=2, metavar=("USERNAME", "PASSWORD"), type=str, required=True,
+
+    auth_group = parser.add_mutually_exclusive_group(required=True)
+
+    auth_group.add_argument(
+        "--no-auth", dest='noauth', action="store_true", default=False,
+        help="make the web interface available without authentication"
+    )
+    auth_group.add_argument(
+        "--user", action="append", nargs=2, metavar=("USERNAME", "PASSWORD"), type=str,
         help="the pair(s) of username and password for basic HTTP authentication"
     )
 

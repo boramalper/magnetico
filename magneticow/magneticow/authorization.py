@@ -45,8 +45,9 @@ def requires_auth(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         auth = flask.request.authorization
-        if not auth or not is_authorized(auth.username, auth.password):
-            return authenticate()
+        if not flask.current_app.arguments.noauth:
+            if not auth or not is_authorized(auth.username, auth.password):
+                return authenticate()
         return f(*args, **kwargs)
     return decorated
 # END OF THE 3RD PARTY COPYRIGHTED CONTENT
