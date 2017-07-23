@@ -118,8 +118,12 @@ def torrents():
     else:
         context["next_page_exists"] = True
 
-    username, password = flask.request.authorization.username, flask.request.authorization.password
-    context["subscription_url"] = "/feed?filter=%s&hash=%s" % (search, generate_feed_hash(username, password, search))
+    if app.arguments.noauth:
+        context["subscription_url"] = "/feed/?filter%s" % search
+    else:
+        username, password = flask.request.authorization.username, flask.request.authorization.password
+        context["subscription_url"] = "/feed?filter=%s&hash=%s" % (
+            search, generate_feed_hash(username, password, search))
 
     if sort_by:
         context["sorted_by"] = sort_by
@@ -210,17 +214,18 @@ def statistics():
 @app.route("/feed")
 def feed():
     filter_ = flask.request.args["filter"]
-    hash_ = flask.request.args["hash"]
     # Check for all possible users who might be requesting.
     # pylint disabled: because we do monkey-patch! [in magneticow.__main__.py:main()]
-    for username, password in app.arguments.user:  # pylint: disable=maybe-no-member
-        if generate_feed_hash(username, password, filter_) == hash_:
-            break
-    else:
-        return flask.Response(
-            "Could not verify your access level for that URL (wrong hash).\n",
-            401
-        )
+    if not app.arguments.noauth:
+        hash_ = flask.request.args["hash"]
+        for username, password in app.arguments.user:  # pylint: disable=maybe-no-member
+            if generate_feed_hash(username, password, filter_) == hash_:
+                break
+        else:
+            return flask.Response(
+                "Could not verify your access level for that URL (wrong hash).\n",
+                401
+            )
 
     context = {}
 
