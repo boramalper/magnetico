@@ -53,6 +53,10 @@ def home_page():
 def torrents():
     search = flask.request.args.get("search")
     page = int(flask.request.args.get("page", 0))
+    try:
+        limit = int(flask.request.args.get('limit', app.arguments.perpage))
+    except ValueError:
+        limit = app.arguments.perpage
 
     context = {
         "search": search,
@@ -77,7 +81,7 @@ def torrents():
         """
     SQL_query += """
         ORDER BY {}
-        LIMIT 20 OFFSET ?
+        LIMIT ? OFFSET ?
     """
 
     sort_by = flask.request.args.get("sort_by")
@@ -106,17 +110,20 @@ def torrents():
 
     with magneticod_db:
         if search:
-            cur = magneticod_db.execute(SQL_query, (search, 20 * page))
+            # query limit+1 so we can check if there is a next page
+            cur = magneticod_db.execute(SQL_query, (search, limit+1, limit * page))
         else:
-            cur = magneticod_db.execute(SQL_query, (20 * page, ))
+            cur = magneticod_db.execute(SQL_query, (limit+1, limit * page))
         context["torrents"] = [Torrent(t[0].hex(), t[1], utils.to_human_size(t[2]),
                                        datetime.fromtimestamp(t[3]).strftime("%d/%m/%Y"), [])
                                for t in cur.fetchall()]
 
-    if len(context["torrents"]) < 20:
-        context["next_page_exists"] = False
-    else:
+    if len(context["torrents"]) > limit:
         context["next_page_exists"] = True
+        # pop off n+1 torrent used for next page indication
+        context["torrents"].pop()
+    else:
+        context["next_page_exists"] = False
 
     if app.arguments.noauth:
         context["subscription_url"] = "/feed/?filter%s" % search
@@ -127,6 +134,8 @@ def torrents():
 
     if sort_by:
         context["sorted_by"] = sort_by
+
+    context["limit"] = limit
 
     return flask.render_template("torrents.html", **context)
 

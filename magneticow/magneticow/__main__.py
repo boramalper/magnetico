@@ -87,6 +87,11 @@ def parse_args() -> argparse.Namespace:
         help="the pair(s) of username and password for basic HTTP authentication"
     )
 
+    parser.add_argument(
+        '--per-page', dest='perpage', action="store", type=int, required=False, default=20,
+        help="number of torrents to list per page by default"
+    )
+
     return parser.parse_args(sys.argv[1:])
 
 if __name__ == "__main__":

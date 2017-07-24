@@ -75,6 +75,7 @@
     {% if sorted_by %}
         <input type="text" name="sort_by" value="{{ sorted_by }}" hidden>
     {% endif %}
+        <input type="text" name="limit" value="{{ limit }}" hidden>
         <input type="number" name="page" value="{{ page - 1 }}" hidden>
     </form>
     <form action="/torrents" method="get">
@@ -83,6 +84,7 @@
     {% if sorted_by %}
         <input type="text" name="sort_by" value="{{ sorted_by }}" hidden>
     {% endif %}
+        <input type="text" name="limit" value="{{ limit }}" hidden>
         <input type="number" name="page" value="{{ page + 1 }}" hidden>
     </form>
 </footer>
