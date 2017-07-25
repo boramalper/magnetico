@@ -126,7 +126,7 @@ def torrents():
         context["next_page_exists"] = False
 
     if app.arguments.noauth:
-        context["subscription_url"] = "/feed/?filter%s" % search
+        context["subscription_url"] = "/feed/?filter=%s" % search
     else:
         username, password = flask.request.authorization.username, flask.request.authorization.password
         context["subscription_url"] = "/feed?filter=%s&hash=%s" % (
