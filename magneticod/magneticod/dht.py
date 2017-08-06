@@ -52,7 +52,7 @@ class SybilNode(asyncio.DatagramProtocol):
 
     async def launch(self, address):
         await asyncio.get_event_loop().create_datagram_endpoint(lambda: self, local_addr=address)
-        logging.info("SybliNode is launched on %s!", address)
+        logging.info("SybilNode is launched on %s!", address)
 
     # mypy ignored: mypy errors because we explicitly stated `transport`s type =)
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:  # type: ignore
