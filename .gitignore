@@ -1,3 +1,7 @@
+src/magneticod/vendor
+src/magneticod/Gopkg.lock
+src/magneticow/vendor
+src/magneticow/Gopkg.lock
 
 # Created by https://www.gitignore.io/api/linux,python,pycharm
 
