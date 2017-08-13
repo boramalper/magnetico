@@ -229,11 +229,17 @@ func setupSqliteDatabase(database *sql.DB) error {
 }
 
 func setupMySQLDatabase(database *sql.DB) error {
-	_, err := database.Exec(
+	// Set strict mode to prevent silent truncation
+	_, err := database.Exec(`SET SESSION SQL_MODE = 'STRICT_ALL_TABLES';`)
+	if err != nil {
+		return err
+	}
+
+	_, err = database.Exec(
 		`CREATE TABLE IF NOT EXISTS torrents ("
 			id		INTEGER PRIMARY KEY AUTO_INCREMENT,
 			info_hash	BINARY(20) NOT NULL UNIQUE,
-			name		VARCHAR(255) NOT NULL,
+			name		VARCHAR(1024) NOT NULL,
 			total_size	BIGINT UNSIGNED NOT NULL,
 			discovered_on	INTEGER UNSIGNED NOT NULL
 		);
