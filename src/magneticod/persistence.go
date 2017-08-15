@@ -77,7 +77,9 @@ func NewDatabase(rawurl string) (*Database, error) {
 
 // AddNewTorrent adds a new torrent to the *queue* to be flushed to the persistent database.
 func (db *Database) AddNewTorrent(torrent bittorrent.Metadata) error {
-	if len(db.newTorrents) >= 1 {
+	db.newTorrents = append(db.newTorrents, torrent)
+
+	if len(db.newTorrents) >= 10 {
 		zap.L().Sugar().Debugf("newTorrents queue is full, attempting to commit %d torrents...",
 			len(db.newTorrents))
 		if err := db.commitNewTorrents(); err != nil {
@@ -85,7 +87,6 @@ func (db *Database) AddNewTorrent(torrent bittorrent.Metadata) error {
 		}
 	}
 
-	db.newTorrents = append(db.newTorrents, torrent)
 	return nil
 }
 
