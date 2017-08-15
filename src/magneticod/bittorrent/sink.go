@@ -39,7 +39,7 @@ func NewMetadataSink(laddr net.TCPAddr) *MetadataSink {
 		DisableTrackers: true,
 		DisablePEX: true,
 		// TODO: Should we disable DHT to force the client to use the peers we supplied only, or not?
-		NoDHT: false,
+		NoDHT: true,
 		PreferNoEncryption: true,
 
 	})
@@ -80,7 +80,7 @@ func (ms *MetadataSink) Terminate() {
 
 
 func (ms *MetadataSink) flush(metadata Metadata) {
-	if ms.terminated {
+	if !ms.terminated {
 		ms.drain <- metadata
 	}
 }

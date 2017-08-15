@@ -136,8 +136,11 @@ func main() {
 				metadataSink.Sink(result)
 
 			case metadata := <-metadataSink.Drain():
+				logger.Sugar().Infof("D I S C O V E R E D: `%s` %x",
+					metadata.Name, metadata.InfoHash)
 				if err := database.AddNewTorrent(metadata); err != nil {
-					logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s", metadata.InfoHash, err.Error())
+					logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s",
+						metadata.InfoHash, err.Error())
 				}
 
 			case <-interrupt_chan:

@@ -11,26 +11,30 @@ import (
 
 
 func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer) {
-	zap.L().Sugar().Debugf("awaiting %x...", infoHash[:])
 	t, isNew := ms.client.AddTorrentInfoHash(infoHash)
+	// If the infoHash we added was not new (i.e. it's already being downloaded by the client)
+	// then t is the handle of the (old) torrent. We add the (presumably new) peer to the torrent
+	// so we can increase the chance of operation being successful, or that the metadata might be
+	// fetched.
 	t.AddPeers([]torrent.Peer{peer})
 	if !isNew {
 		// If the recently added torrent is not new, then quit as we do not want multiple
 		// awaitMetadata goroutines waiting on the same torrent.
 		return
 	} else {
+		// Drop the torrent once we got the metadata.
 		defer t.Drop()
 	}
 
 	// Wait for the torrent client to receive the metadata for the torrent, meanwhile allowing
 	// termination to be handled gracefully.
+	zap.L().Sugar().Debugf("awaiting %x...", infoHash[:])
 	select {
 	case <- ms.termination:
 		return
 
 	case <- t.GotInfo():
 	}
-	zap.L().Sugar().Warnf("==== GOT INFO for %x", infoHash[:])
 
 	info := t.Info()
 	var files []metainfo.FileInfo
@@ -38,6 +42,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer)
 		if strings.ContainsRune(info.Name, '/') {
 			// A single file torrent cannot have any '/' characters in its name. We treat it as
 			// illegal.
+			zap.L().Sugar().Debugf("!!!! illegal character in name!  \"%s\"", info.Name)
 			return
 		}
 		files = []metainfo.FileInfo{{Length: info.Length, Path:[]string{info.Name}}}
@@ -52,6 +57,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer)
 		if file.Length < 0 {
 			// All files' sizes must be greater than or equal to zero, otherwise treat them as
 			// illegal and ignore.
+			zap.L().Sugar().Debugf("!!!! file size zero or less!  \"%s\" (%d)", file.Path, file.Length)
 			return
 		}
 		totalSize += uint64(file.Length)
