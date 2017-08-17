@@ -4,15 +4,14 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"github.com/jessevdk/go-flags"
 
-//	"magneticod/bittorrent"
-	"magneticod/dht"
-	"go.uber.org/zap/zapcore"
-	"regexp"
 	"magneticod/bittorrent"
+	"magneticod/dht"
 )
 
 
@@ -133,11 +132,16 @@ func main() {
 			select {
 			case result := <-trawlingManager.Output():
 				logger.Info("result: ", zap.String("hash", result.InfoHash.String()))
-				metadataSink.Sink(result)
+				if !database.DoesExist(result.InfoHash[:]) {
+					metadataSink.Sink(result)
+				}
 
 			case metadata := <-metadataSink.Drain():
+				logger.Sugar().Infof("D I S C O V E R E D: `%s` %x",
+					metadata.Name, metadata.InfoHash)
 				if err := database.AddNewTorrent(metadata); err != nil {
-					logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s", metadata.InfoHash, err.Error())
+					logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s",
+						metadata.InfoHash, err.Error())
 				}
 
 			case <-interrupt_chan:
