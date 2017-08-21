@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"net/url"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"
 
@@ -15,21 +16,19 @@ import (
 	"bytes"
 )
 
-
 type engineType uint8
 
 const (
-	SQLITE engineType = 0
-	POSTGRESQL = 1
+	SQLITE     engineType = 0
+	POSTGRESQL            = 1
+	MYSQL                 = 2
 )
 
-
 type Database struct {
-	database *sql.DB
-	engine engineType
-	newTorrents []bittorrent.Metadata
+	database    *sql.DB
+	engine      engineType
+	newTorrents [] bittorrent.Metadata
 }
-
 
 // NewDatabase creates a new Database.
 //
@@ -54,6 +53,10 @@ func NewDatabase(rawurl string) (*Database, error) {
 	case "postgresql":
 		db.engine = POSTGRESQL
 		db.database, err = sql.Open("postgresql", rawurl)
+
+	case "mysql":
+		db.engine = MYSQL
+		db.database, err = sql.Open("mysql", rawurl)
 
 	default:
 		return nil, fmt.Errorf("unknown URI scheme (or malformed URI)!")
@@ -124,7 +127,7 @@ func (db *Database) AddNewTorrent(torrent bittorrent.Metadata) error {
 
 
 func (db *Database) commitNewTorrents() error {
-	tx, err := db.database.Begin()
+  tx, err := db.database.Begin()
 	if err != nil {
 		return fmt.Errorf("sql.DB.Begin()!  %s", err.Error())
 	}
@@ -175,12 +178,10 @@ func (db *Database) commitNewTorrents() error {
 	return nil
 }
 
-
 func (db *Database) Close() {
 	// Be careful to not to get into an infinite loop. =)
 	db.database.Close()
 }
-
 
 func (db *Database) setupDatabase() error {
 	switch db.engine {
@@ -190,13 +191,15 @@ func (db *Database) setupDatabase() error {
 	case POSTGRESQL:
 		zap.L().Fatal("setupDatabase() is not implemented for PostgreSQL yet!")
 
+	case MYSQL:
+		return setupMySQLDatabase(db.database)
+
 	default:
 		zap.L().Sugar().Fatalf("Unknown database engine value %d! (programmer error)", db.engine)
 	}
 
 	return nil
 }
-
 
 func setupSqliteDatabase(database *sql.DB) error {
 	// Enable Write-Ahead Logging for SQLite as "WAL provides more concurrency as readers do not
@@ -241,6 +244,39 @@ func setupSqliteDatabase(database *sql.DB) error {
 			path        TEXT NOT NULL
 		);`,
 	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setupMySQLDatabase(database *sql.DB) error {
+	// Set strict mode to prevent silent truncation
+	_, err := database.Exec(`SET SESSION SQL_MODE = 'STRICT_ALL_TABLES';`)
+	if err != nil {
+		return err
+	}
+
+	_, err = database.Exec(
+		`CREATE TABLE IF NOT EXISTS torrents ("
+			id		INTEGER PRIMARY KEY AUTO_INCREMENT,
+			info_hash	BINARY(20) NOT NULL UNIQUE,
+			name		VARCHAR(1024) NOT NULL,
+			total_size	BIGINT UNSIGNED NOT NULL,
+			discovered_on	INTEGER UNSIGNED NOT NULL
+		);
+
+		ALTER TABLE torrents ADD INDEX info_hash_index (info_hash);
+
+		CREATE TABLE IF NOT EXISTS files (
+			id		INTEGER PRIMARY KEY AUTO_INCREMENT,
+			torrent_id	INTEGER REFERENCES torrents (id) ON DELETE CASCADE ON UPDATE RESTRICT,
+			size		BIGINT NOT NULL,
+			path		TEXT NOT NULL
+		);`,
+	)
+
 	if err != nil {
 		return err
 	}
