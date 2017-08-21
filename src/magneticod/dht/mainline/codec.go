@@ -236,11 +236,12 @@ func (e Error) MarshalBencode() ([]byte, error) {
 func (e *Error) UnmarshalBencode(b []byte) (err error) {
 	var code, msgLen int
 
-	regex := regexp.MustCompile(`li([0-9]+)e([0-9]+):(.+)e`)
-	// I don't know how to use regexp.Regexp.FindAllSubmatch:
-	//     TODO: Why three level deep slices?
-	//     TODO: What is @n?
-	matches := regex.FindAllSubmatch(b, 1)[0][1:]
+	result := regexp.MustCompile(`li([0-9]+)e([0-9]+):(.+)e`).FindAllSubmatch(b, 1)
+	if len(result) == 0 {
+		return fmt.Errorf("could not parse the error list")
+	}
+
+	matches := result[0][1:]
 	if _, err := fmt.Sscanf(string(matches[0]), "%d", &code); err != nil {
 		return fmt.Errorf("could not parse the error code: %s", err.Error())
 	}

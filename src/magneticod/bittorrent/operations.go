@@ -22,18 +22,22 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer)
 		// awaitMetadata goroutines waiting on the same torrent.
 		return
 	} else {
-		// Drop the torrent once we got the metadata.
+		// Drop the torrent once we return from this function, whether we got the metadata or an
+		// error.
 		defer t.Drop()
 	}
 
 	// Wait for the torrent client to receive the metadata for the torrent, meanwhile allowing
 	// termination to be handled gracefully.
-	zap.L().Sugar().Debugf("awaiting %x...", infoHash[:])
 	select {
-	case <- ms.termination:
+	case <- t.GotInfo():
+
+	case <-time.After(5 * time.Minute):
+		zap.L().Sugar().Debugf("Fetcher timeout!  %x", infoHash)
 		return
 
-	case <- t.GotInfo():
+	case <- ms.termination:
+		return
 	}
 
 	info := t.Info()

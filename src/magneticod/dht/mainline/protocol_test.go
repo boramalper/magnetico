@@ -198,3 +198,24 @@ func TestValidators(t *testing.T) {
 		}
 	}
 }
+
+
+func TestNewFindNodeQuery(t *testing.T) {
+	if !validateFindNodeQueryMessage(NewFindNodeQuery([]byte("qwertyuopasdfghjklzx"), []byte("xzlkjhgfdsapouytrewq"))) {
+		t.Errorf("NewFindNodeQuery returned an invalid message!")
+	}
+}
+
+
+func TestNewPingResponse(t *testing.T) {
+	if !validatePingORannouncePeerResponseMessage(NewPingResponse([]byte("tt"), []byte("qwertyuopasdfghjklzx"))) {
+		t.Errorf("NewPingResponse returned an invalid message!")
+	}
+}
+
+
+func TestNewGetPeersResponseWithNodes(t *testing.T) {
+	if !validateGetPeersResponseMessage(NewGetPeersResponseWithNodes([]byte("tt"), []byte("qwertyuopasdfghjklzx"), []byte("token"), []CompactNodeInfo{})) {
+		t.Errorf("NewGetPeersResponseWithNodes returned an invalid message!")
+	}
+}

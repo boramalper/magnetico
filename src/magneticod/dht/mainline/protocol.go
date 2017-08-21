@@ -105,6 +105,9 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 				p.eventHandlers.OnAnnouncePeerQuery(msg, addr)
 			}
 
+		case "vote":
+			// Although we are aware that such method exists, we ignore.
+
 		default:
 			zap.L().Debug("A KRPC query of an unknown method received!",
 				zap.String("method", msg.Q))
@@ -140,8 +143,9 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 	case "e":
 		zap.L().Sugar().Debugf("Protocol error received: `%s` (%d)", msg.E.Message, msg.E.Code)
 	default:
-		zap.L().Debug("A KRPC message of an unknown type received!",
+		/* zap.L().Debug("A KRPC message of an unknown type received!",
 			zap.String("type", msg.Y))
+		*/
 	}
 }
 
@@ -159,7 +163,7 @@ func NewPingQuery(id []byte) *Message {
 func NewFindNodeQuery(id []byte, target []byte) *Message {
 	return &Message{
 		Y: "q",
-		T: []byte("\x00"),
+		T: []byte("aa"),
 		Q: "find_node",
 		A: QueryArguments{
 			ID: id,

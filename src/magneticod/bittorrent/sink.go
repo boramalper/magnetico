@@ -40,7 +40,8 @@ func NewMetadataSink(laddr net.TCPAddr) *MetadataSink {
 		DisablePEX: true,
 		// TODO: Should we disable DHT to force the client to use the peers we supplied only, or not?
 		NoDHT: true,
-		PreferNoEncryption: true,
+		Seed: false,
+
 
 	})
 	if err != nil {
