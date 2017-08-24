@@ -194,7 +194,9 @@ func (s *TrawlingService) onFindNodeResponse(response *Message, addr net.Addr) {
 
 	for _, node := range response.R.Nodes {
 		if node.Addr.Port != 0 {  // Ignore nodes who "use" port 0.
-			s.routingTable[string(node.ID)] = &node.Addr
+			if len(s.routingTable) < 10000 {
+				s.routingTable[string(node.ID)] = &node.Addr
+			}
 		}
 	}
 }

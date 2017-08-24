@@ -1,12 +1,13 @@
 package bittorrent
 
 import (
+	"net"
+
 	"go.uber.org/zap"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 
 	"magneticod/dht/mainline"
-	"net"
 )
 
 
@@ -23,7 +24,6 @@ type Metadata struct {
 
 
 type MetadataSink struct {
-	activeInfoHashes []metainfo.Hash
 	client *torrent.Client
 	drain chan Metadata
 	terminated bool
@@ -58,7 +58,6 @@ func (ms *MetadataSink) Sink(res mainline.TrawlingResult) {
 		zap.L().Panic("Trying to Sink() an already closed MetadataSink!")
 	}
 
-	ms.activeInfoHashes = append(ms.activeInfoHashes, res.InfoHash)
 	go ms.awaitMetadata(res.InfoHash, res.Peer)
 }
 
@@ -67,7 +66,6 @@ func (ms *MetadataSink) Drain() <-chan Metadata {
 	if ms.terminated {
 		zap.L().Panic("Trying to Drain() an already closed MetadataSink!")
 	}
-
 	return ms.drain
 }
 
@@ -80,8 +78,8 @@ func (ms *MetadataSink) Terminate() {
 }
 
 
-func (ms *MetadataSink) flush(metadata Metadata) {
+func (ms *MetadataSink) flush(result Metadata) {
 	if !ms.terminated {
-		ms.drain <- metadata
+		ms.drain <- result
 	}
 }

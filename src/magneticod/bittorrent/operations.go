@@ -4,6 +4,7 @@ import (
 	"time"
 	"strings"
 
+	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"go.uber.org/zap"
@@ -18,19 +19,18 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer)
 	// fetched.
 	t.AddPeers([]torrent.Peer{peer})
 	if !isNew {
-		// If the recently added torrent is not new, then quit as we do not want multiple
-		// awaitMetadata goroutines waiting on the same torrent.
+		// Return immediately if we are trying to await on an ongoing metadata-fetching operation.
+		// Each ongoing operation should have one and only one "await*" function waiting on it.
 		return
-	} else {
-		// Drop the torrent once we return from this function, whether we got the metadata or an
-		// error.
-		defer t.Drop()
 	}
 
 	// Wait for the torrent client to receive the metadata for the torrent, meanwhile allowing
 	// termination to be handled gracefully.
+	var info *metainfo.Info
 	select {
 	case <- t.GotInfo():
+		info = t.Info()
+		t.Drop()
 
 	case <-time.After(5 * time.Minute):
 		zap.L().Sugar().Debugf("Fetcher timeout!  %x", infoHash)
@@ -40,7 +40,6 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer)
 		return
 	}
 
-	info := t.Info()
 	var files []metainfo.FileInfo
 	if len(info.Files) == 0 {
 		if strings.ContainsRune(info.Name, '/') {
@@ -75,3 +74,111 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer)
 		Files: files,
 	})
 }
+
+
+func (fs *FileSink) awaitFile(infoHash []byte, filePath string, peer *torrent.Peer) {
+	var infoHash_ [20]byte
+	copy(infoHash_[:], infoHash)
+	t, isNew := fs.client.AddTorrentInfoHash(infoHash_)
+	if peer != nil {
+		t.AddPeers([]torrent.Peer{*peer})
+	}
+	if !isNew {
+		// Return immediately if we are trying to await on an ongoing file-downloading operation.
+		// Each ongoing operation should have one and only one "await*" function waiting on it.
+		return
+	}
+
+	// Setup & start the timeout timer.
+	timeout := time.After(fs.timeout)
+
+	// Once we return from this function, drop the torrent from the client.
+	// TODO: Check if dropping a torrent also cancels any outstanding read operations?
+	defer t.Drop()
+
+	select {
+	case <-t.GotInfo():
+
+	case <- timeout:
+		return
+	}
+
+	var match *torrent.File
+	for _, file := range t.Files() {
+		if file.Path() == filePath {
+			match = &file
+		} else {
+			file.Cancel()
+		}
+	}
+	if match == nil {
+		var filePaths []string
+		for _, file := range t.Files() { filePaths = append(filePaths, file.Path()) }
+
+		zap.L().Warn(
+			"The leech (FileSink) has been requested to download a file which does not exist!",
+			zap.ByteString("torrent", infoHash),
+			zap.String("requestedFile", filePath),
+			zap.Strings("allFiles", filePaths),
+		)
+	}
+
+
+	reader := t.NewReader()
+	defer reader.Close()
+
+	fileDataChan := make(chan []byte)
+	go downloadFile(*match, reader, fileDataChan)
+
+	select {
+	case fileData := <-fileDataChan:
+		if fileData != nil {
+			fs.flush(File{
+				torrentInfoHash: infoHash,
+				path: match.Path(),
+				data: fileData,
+			})
+		}
+
+	case <- timeout:
+		zap.L().Debug(
+			"Timeout while downloading a file!",
+			zap.ByteString("torrent", infoHash),
+			zap.String("file", filePath),
+		)
+	}
+}
+
+
+func downloadFile(file torrent.File, reader *torrent.Reader, fileDataChan chan<- []byte) {
+	readSeeker := missinggo.NewSectionReadSeeker(reader, file.Offset(), file.Length())
+
+	fileData := make([]byte, file.Length())
+	n, err := readSeeker.Read(fileData)
+	if int64(n) != file.Length() {
+		zap.L().Debug(
+			"Not all of a file could be read!",
+			zap.ByteString("torrent", file.Torrent().InfoHash()[:]),
+			zap.String("file", file.Path()),
+			zap.Int64("fileLength", file.Length()),
+			zap.Int("n", n),
+		)
+		fileDataChan <- nil
+		return
+	}
+	if err != nil {
+		zap.L().Debug(
+			"Error while downloading a file!",
+			zap.Error(err),
+			zap.ByteString("torrent", file.Torrent().InfoHash()[:]),
+			zap.String("file", file.Path()),
+			zap.Int64("fileLength", file.Length()),
+			zap.Int("n", n),
+		)
+		fileDataChan <- nil
+		return
+	}
+
+	fileDataChan <- fileData
+}
+

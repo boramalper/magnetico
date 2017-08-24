@@ -1,19 +1,18 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
 	"database/sql"
+	"fmt"
 	"net/url"
+	"path"
+	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"
 
 	"magneticod/bittorrent"
-
-	"path"
-	"os"
-	"bytes"
 )
 
 type engineType uint8
@@ -226,7 +225,13 @@ func setupSqliteDatabase(database *sql.DB) error {
 		return err
 	}
 
-	_, err = database.Exec(
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+
+	// Essential, and valid for all user_version`s:
+	_, err = tx.Exec(
 		`CREATE TABLE IF NOT EXISTS torrents (
 			id             INTEGER PRIMARY KEY,
 			info_hash      BLOB NOT NULL UNIQUE,
@@ -242,9 +247,39 @@ func setupSqliteDatabase(database *sql.DB) error {
 			torrent_id  INTEGER REFERENCES torrents ON DELETE CASCADE ON UPDATE RESTRICT,
 			size        INTEGER NOT NULL,
 			path        TEXT NOT NULL
-		);`,
+		);
+		`,
 	)
 	if err != nil {
+		return err
+	}
+
+	// Get the user_version:
+	res, err := tx.Query(
+		`PRAGMA user_version;`,
+	)
+	if err != nil {
+		return err
+	}
+	var userVersion int;
+	res.Next()
+	res.Scan(&userVersion)
+
+	// Upgrade to the latest schema:
+	switch userVersion {
+	// Upgrade from user_version 0 to 1
+	case 0:
+		_, err = tx.Exec(
+			`ALTER TABLE torrents ADD COLUMN readme TEXT;
+			PRAGMA user_version = 1;`,
+		)
+		if err != nil {
+			return err
+		}
+		// Add `fallthrough`s as needed to keep upgrading...
+	}
+
+	if err = tx.Commit(); err != nil {
 		return err
 	}
 
