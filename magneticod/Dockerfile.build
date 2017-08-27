@@ -1,0 +1,12 @@
+# python 3.5 is the latest version that works with the stable version of pyinstaller
+FROM python:3.5
+
+RUN mkdir -p /usr/src/app
+
+WORKDIR /usr/src/app
+
+COPY . .
+RUN pip install -e .
+RUN pyinstaller magneticod.spec
+RUN pip install pyinstaller
+CMD ["base64", "-w 0", "dist/magneticod"]

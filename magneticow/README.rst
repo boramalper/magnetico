@@ -104,6 +104,17 @@ Instructions
 
        systemctl --user stop magneticow
 
+Alternate instructions
+======================
+
+For building standalone static **magneticow** binaries (using pyinstaller): ::
+
+       docker build -t magneticow_builder -f Dockerfile.build .
+       docker run --rm -t magneticow_builder | base64 -d > magneticow
+       chmod +x magneticow
+
+You can now start **magneticow** by executing ``./magneticow``, as you normally would. If you get the ``magneticow is a folder``, try to move to a different directory with no **magneticow** folder.
+
 Using
 =====
 **magneticow** does not require user interference to operate, once it starts running. Hence, there is no "user manual",

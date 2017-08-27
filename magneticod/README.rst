@@ -103,6 +103,17 @@ Instructions
     Keep **magneticod** running so that when you finish installing **magneticow**, database will be populated and you
     can see some results.
 
+Alternate instructions
+======================
+
+For building standalone static **magneticod** binaries (using pyinstaller): ::
+
+       docker build -t magneticod_builder -f Dockerfile.build .
+       docker run --rm -t magneticod_builder | base64 -d > magneticod
+       chmod +x magneticod
+
+You can now start **magneticod** by executing ``./magneticod``, as you normally would.
+
 Using
 =====
 **magneticod** does not require user interference to operate, once it starts running. Hence, there is no "user manual",
