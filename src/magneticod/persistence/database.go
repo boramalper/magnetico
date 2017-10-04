@@ -1,4 +1,4 @@
-package main
+package persistence
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"magneticod/bittorrent"
+	"regexp"
 )
 
 type engineType uint8
@@ -78,7 +79,7 @@ func NewDatabase(rawurl string) (*Database, error) {
 }
 
 
-func (db *Database) DoesExist(infoHash []byte) bool {
+func (db *Database) DoesTorrentExist(infoHash []byte) bool {
 	for _, torrent := range db.newTorrents {
 		if bytes.Equal(infoHash, torrent.InfoHash) {
 			return true;
@@ -96,6 +97,30 @@ func (db *Database) DoesExist(infoHash []byte) bool {
 	return rows.Next()
 }
 
+func (db *Database) FindAnIncompleteTorrent(pathRegex *regexp.Regexp, maxSize uint) error {
+	switch db.engine {
+	case SQLITE:
+		return db.findAnIncompleteTorrent_SQLite(pathRegex, maxSize)
+
+	default:
+		zap.L().Fatal("Unknown database engine!", zap.Uint8("engine", uint8(db.engine)))
+		return nil
+	}
+}
+
+func (db *Database) findAnIncompleteTorrent_SQLite(pathRegex *regexp.Regexp, maxSize uint) error {
+	// TODO: Prefer torrents with most seeders & leechs (i.e. most popular)
+	_, err := db.database.Query(`
+		SELECT torrents.info_hash, files.path FROM files WHERE files.path REGEXP ?
+		INNER JOIN torrents ON files.torrent_id = torrents.id LIMIT 1;
+	`)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 
 // AddNewTorrent adds a new torrent to the *queue* to be flushed to the persistent database.
 func (db *Database) AddNewTorrent(torrent bittorrent.Metadata) error {
@@ -107,7 +132,7 @@ func (db *Database) AddNewTorrent(torrent bittorrent.Metadata) error {
 	// that it doesn't exists there, add it to the sink.
 	// Hence check for the last time whether the torrent exists in the database, and only if not,
 	// add it.
-	if db.DoesExist(torrent.InfoHash) {
+	if db.DoesTorrentExist(torrent.InfoHash) {
 		return nil;
 	}
 
@@ -125,8 +150,14 @@ func (db *Database) AddNewTorrent(torrent bittorrent.Metadata) error {
 }
 
 
+func (db *Database) AddReadme(infoHash []byte, path string, data []byte) error {
+	// TODO
+	return nil
+}
+
+
 func (db *Database) commitNewTorrents() error {
-  tx, err := db.database.Begin()
+	tx, err := db.database.Begin()
 	if err != nil {
 		return fmt.Errorf("sql.DB.Begin()!  %s", err.Error())
 	}
@@ -216,11 +247,11 @@ func setupSqliteDatabase(database *sql.DB) error {
 	//
 	// Enable foreign key constraints in SQLite which are crucial to prevent programmer errors on
 	// our side.
-	_, err := database.Exec(
-		`PRAGMA journal_mode=WAL;
+	_, err := database.Exec(`
+		PRAGMA journal_mode=WAL;
 		PRAGMA temp_store=1;
-		PRAGMA foreign_keys=ON;`,
-	)
+		PRAGMA foreign_keys=ON;
+	`)
 	if err != nil {
 		return err
 	}
@@ -231,33 +262,28 @@ func setupSqliteDatabase(database *sql.DB) error {
 	}
 
 	// Essential, and valid for all user_version`s:
-	_, err = tx.Exec(
-		`CREATE TABLE IF NOT EXISTS torrents (
+	// TODO: "torrent_id" column of the "files" table can be NULL, how can we fix this in a new schema?
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS torrents (
 			id             INTEGER PRIMARY KEY,
 			info_hash      BLOB NOT NULL UNIQUE,
 			name           TEXT NOT NULL,
 			total_size     INTEGER NOT NULL CHECK(total_size > 0),
 			discovered_on  INTEGER NOT NULL CHECK(discovered_on > 0)
 		);
-
-		CREATE INDEX IF NOT EXISTS info_hash_index ON torrents (info_hash);
-
 		CREATE TABLE IF NOT EXISTS files (
 			id          INTEGER PRIMARY KEY,
 			torrent_id  INTEGER REFERENCES torrents ON DELETE CASCADE ON UPDATE RESTRICT,
 			size        INTEGER NOT NULL,
 			path        TEXT NOT NULL
 		);
-		`,
-	)
+	`)
 	if err != nil {
 		return err
 	}
 
 	// Get the user_version:
-	res, err := tx.Query(
-		`PRAGMA user_version;`,
-	)
+	res, err := tx.Query(`PRAGMA user_version;`)
 	if err != nil {
 		return err
 	}
@@ -265,18 +291,57 @@ func setupSqliteDatabase(database *sql.DB) error {
 	res.Next()
 	res.Scan(&userVersion)
 
-	// Upgrade to the latest schema:
 	switch userVersion {
 	// Upgrade from user_version 0 to 1
+	// The Change:
+	//   * `info_hash_index` is recreated as UNIQUE.
 	case 0:
-		_, err = tx.Exec(
-			`ALTER TABLE torrents ADD COLUMN readme TEXT;
-			PRAGMA user_version = 1;`,
-		)
+		zap.S().Warnf("Updating database schema from 0 to 1... (this might take a while)")
+		_, err = tx.Exec(`
+			DROP INDEX info_hash_index;
+			CREATE UNIQUE INDEX info_hash_index ON torrents	(info_hash);
+			PRAGMA user_version = 1;
+		`)
 		if err != nil {
 			return err
 		}
-		// Add `fallthrough`s as needed to keep upgrading...
+		fallthrough
+	// Upgrade from user_version 1 to 2
+	// The Change:
+	//   * Added `is_readme` and `content` columns to the `files` table, and the constraints & the
+	//     the indices they entail.
+	//     * Added unique index `readme_index`  on `files` table.
+	case 1:
+		zap.S().Warnf("Updating database schema from 1 to 2... (this might take a while)")
+		// We introduce two new columns here: content BLOB, and is_readme INTEGER which we treat as
+		// a bool (hence the CHECK).
+		// The reason for the change is that as we introduce the new "readme" feature which
+		// downloads a readme file as a torrent descriptor, we needed to store it somewhere in the
+		// database with the following conditions:
+		//
+		//   1. There can be one and only one readme (content) for a given torrent; hence the
+		//      UNIQUE INDEX on (torrent_id, is_description) (remember that SQLite treats each NULL
+		//      value as distinct [UNIQUE], see https://sqlite.org/nulls.html).
+		//   2. We would like to keep the readme (content) associated with the file it came from;
+		//      hence we modify the files table instead of the torrents table.
+		//
+		// Regarding the implementation details, following constraints arise:
+		//
+		//   1. The column is_readme is either NULL or 1, and if it is 1, then content column cannot
+		//      be NULL (but might be an empty BLOB). Vice versa, if content column of a row is,
+		//      NULL then is_readme must be NULL.
+		//
+		//      This is to prevent unused content fields filling up the database, and to catch
+		//      programmers' errors.
+		_, err = tx.Exec(`
+			ALTER TABLE files ADD COLUMN is_readme INTEGER CHECK (is_readme IS NULL OR is_readme=1);
+			ALTER TABLE files ADD COLUMN content   BLOB CHECK((content IS NULL AND is_readme IS NULL) OR (content IS NOT NULL AND is_readme=1));
+			CREATE UNIQUE INDEX readme_index ON files (torrent_id, is_readme);
+			PRAGMA user_version = 2;
+		`)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err = tx.Commit(); err != nil {

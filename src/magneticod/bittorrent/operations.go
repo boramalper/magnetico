@@ -8,6 +8,9 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"go.uber.org/zap"
+	"os"
+	"path"
+	"persistence"
 )
 
 
@@ -40,48 +43,46 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer torrent.Peer)
 		return
 	}
 
-	var files []metainfo.FileInfo
-	if len(info.Files) == 0 {
-		if strings.ContainsRune(info.Name, '/') {
-			// A single file torrent cannot have any '/' characters in its name. We treat it as
-			// illegal.
-			zap.L().Sugar().Debugf("!!!! illegal character in name!  \"%s\"", info.Name)
-			return
-		}
-		files = []metainfo.FileInfo{{Length: info.Length, Path:[]string{info.Name}}}
-	} else {
-		// TODO: We have to make sure that anacrolix/torrent checks for '/' character in file paths
-		// before concatenating them. This is currently assumed here. We should write a test for it.
-		files = info.Files
+	var files []persistence.File
+	for _, file := range info.Files {
+		files = append(files, persistence.File{
+			Size: file.Length,
+			Path: file.DisplayPath(info),
+		})
 	}
 
 	var totalSize uint64
 	for _, file := range files {
-		if file.Length < 0 {
+		if file.Size < 0 {
 			// All files' sizes must be greater than or equal to zero, otherwise treat them as
 			// illegal and ignore.
-			zap.L().Sugar().Debugf("!!!! file size zero or less!  \"%s\" (%d)", file.Path, file.Length)
+			zap.L().Sugar().Debugf("!!!! file size zero or less!  \"%s\" (%d)", file.Path, file.Size)
 			return
 		}
-		totalSize += uint64(file.Length)
+		totalSize += uint64(file.Size)
 	}
 
 	ms.flush(Metadata{
-		InfoHash: infoHash[:],
-		Name: info.Name,
-		TotalSize: totalSize,
+		InfoHash:     infoHash[:],
+		Name:         info.Name,
+		TotalSize:    totalSize,
 		DiscoveredOn: time.Now().Unix(),
-		Files: files,
+		Files:        files,
+		Peers:        nil,
 	})
 }
 
 
-func (fs *FileSink) awaitFile(infoHash []byte, filePath string, peer *torrent.Peer) {
+func (fs *FileSink) awaitFile(req *FileRequest) {
+	// Remove the download directory of the torrent after the operation is completed.
+	// TODO: what if RemoveAll() returns error, do we care, and if we do, how to handle it?
+	defer os.RemoveAll(path.Join(fs.baseDownloadDir, string(req.InfoHash)))
+
 	var infoHash_ [20]byte
-	copy(infoHash_[:], infoHash)
+	copy(infoHash_[:], req.InfoHash)
 	t, isNew := fs.client.AddTorrentInfoHash(infoHash_)
-	if peer != nil {
-		t.AddPeers([]torrent.Peer{*peer})
+	if len(req.Peers) > 0 {
+		t.AddPeers(req.Peers)
 	}
 	if !isNew {
 		// Return immediately if we are trying to await on an ongoing file-downloading operation.
@@ -90,7 +91,7 @@ func (fs *FileSink) awaitFile(infoHash []byte, filePath string, peer *torrent.Pe
 	}
 
 	// Setup & start the timeout timer.
-	timeout := time.After(fs.timeout)
+	timeout := time.After(fs.timeoutDuration)
 
 	// Once we return from this function, drop the torrent from the client.
 	// TODO: Check if dropping a torrent also cancels any outstanding read operations?
@@ -105,7 +106,7 @@ func (fs *FileSink) awaitFile(infoHash []byte, filePath string, peer *torrent.Pe
 
 	var match *torrent.File
 	for _, file := range t.Files() {
-		if file.Path() == filePath {
+		if file.Path() == req.Path {
 			match = &file
 		} else {
 			file.Cancel()
@@ -117,12 +118,11 @@ func (fs *FileSink) awaitFile(infoHash []byte, filePath string, peer *torrent.Pe
 
 		zap.L().Warn(
 			"The leech (FileSink) has been requested to download a file which does not exist!",
-			zap.ByteString("torrent", infoHash),
-			zap.String("requestedFile", filePath),
+			zap.ByteString("torrent", req.InfoHash),
+			zap.String("requestedFile", req.Path),
 			zap.Strings("allFiles", filePaths),
 		)
 	}
-
 
 	reader := t.NewReader()
 	defer reader.Close()
@@ -133,18 +133,17 @@ func (fs *FileSink) awaitFile(infoHash []byte, filePath string, peer *torrent.Pe
 	select {
 	case fileData := <-fileDataChan:
 		if fileData != nil {
-			fs.flush(File{
-				torrentInfoHash: infoHash,
-				path: match.Path(),
-				data: fileData,
+			fs.flush(FileResult{
+				Request:  req,
+				FileData: fileData,
 			})
 		}
 
 	case <- timeout:
 		zap.L().Debug(
 			"Timeout while downloading a file!",
-			zap.ByteString("torrent", infoHash),
-			zap.String("file", filePath),
+			zap.ByteString("torrent", req.InfoHash),
+			zap.String("file", req.Path),
 		)
 	}
 }
@@ -156,9 +155,10 @@ func downloadFile(file torrent.File, reader *torrent.Reader, fileDataChan chan<-
 	fileData := make([]byte, file.Length())
 	n, err := readSeeker.Read(fileData)
 	if int64(n) != file.Length() {
+		infoHash := file.Torrent().InfoHash()
 		zap.L().Debug(
 			"Not all of a file could be read!",
-			zap.ByteString("torrent", file.Torrent().InfoHash()[:]),
+			zap.ByteString("torrent", infoHash[:]),
 			zap.String("file", file.Path()),
 			zap.Int64("fileLength", file.Length()),
 			zap.Int("n", n),
@@ -167,10 +167,11 @@ func downloadFile(file torrent.File, reader *torrent.Reader, fileDataChan chan<-
 		return
 	}
 	if err != nil {
+		infoHash := file.Torrent().InfoHash()
 		zap.L().Debug(
 			"Error while downloading a file!",
 			zap.Error(err),
-			zap.ByteString("torrent", file.Torrent().InfoHash()[:]),
+			zap.ByteString("torrent", infoHash[:]),
 			zap.String("file", file.Path()),
 			zap.Int64("fileLength", file.Length()),
 			zap.Int("n", n),

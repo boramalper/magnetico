@@ -1,13 +1,11 @@
 package bittorrent
 
 import (
-	"net"
-
 	"go.uber.org/zap"
 	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/metainfo"
 
 	"magneticod/dht/mainline"
+	"persistence"
 )
 
 
@@ -19,7 +17,13 @@ type Metadata struct {
 	TotalSize uint64
 	DiscoveredOn int64
 	// Files must be populated for both single-file and multi-file torrents!
-	Files []metainfo.FileInfo
+	Files []persistence.File
+	// Peers is the list of the "active" peers at the time of fetching metadata. Currently, it's
+	// always nil as anacrolix/torrent does not support returning list of peers for a given torrent,
+	// but in the future, this information can be useful for the CompletingCoordinator which can use
+	// those Peers to download the README file (if any found).
+	Peers []torrent.Peer
+
 }
 
 
@@ -31,11 +35,11 @@ type MetadataSink struct {
 }
 
 
-func NewMetadataSink(laddr net.TCPAddr) *MetadataSink {
+func NewMetadataSink(laddr string) *MetadataSink {
 	ms := new(MetadataSink)
 	var err error
 	ms.client, err = torrent.NewClient(&torrent.Config{
-		ListenAddr: laddr.String(),
+		ListenAddr: laddr,
 		DisableTrackers: true,
 		DisablePEX: true,
 		// TODO: Should we disable DHT to force the client to use the peers we supplied only, or not?

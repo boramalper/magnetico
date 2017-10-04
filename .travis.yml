@@ -1,14 +1,15 @@
 sudo: enabled
 dist: xenial
-language: python
-python:
-  - "3.5"
-# versions 3.6.0 and 3.6.1 have bugs that affect magneticod
+language: go
+go:
+  - 1.8.3
 
 before_install:
   - "sudo apt-get update -qq"
   - "sudo apt-get install python3-dev"
   - "pip3 install mypy pylint"
+
+  - ""
 
 install:
   - "pip3 install ./magneticod"

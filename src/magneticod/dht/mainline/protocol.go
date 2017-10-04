@@ -31,7 +31,7 @@ type ProtocolEventHandlers struct {
 }
 
 
-func NewProtocol(laddr net.UDPAddr, eventHandlers ProtocolEventHandlers) (p *Protocol) {
+func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol) {
 	p = new(Protocol)
 	p.transport = NewTransport(laddr, p.onMessage)
 	p.eventHandlers = eventHandlers

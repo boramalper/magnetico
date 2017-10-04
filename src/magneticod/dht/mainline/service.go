@@ -38,7 +38,7 @@ type TrawlingServiceEventHandlers struct {
 }
 
 
-func NewTrawlingService(laddr net.UDPAddr, eventHandlers TrawlingServiceEventHandlers) *TrawlingService {
+func NewTrawlingService(laddr string, eventHandlers TrawlingServiceEventHandlers) *TrawlingService {
 	service := new(TrawlingService)
 	service.protocol = NewProtocol(
 		laddr,

@@ -39,7 +39,7 @@ html {
 }
 
 pre {
-    font-family: 'Noto Mono';
+    font-family: 'Noto Mono', monospace;
     line-height: 1.2em;
 }
 
@@ -47,6 +47,12 @@ body {
     padding: 1em 3em 1em 3em;
     font-weight: 400;
     line-height: 1.45;
+}
+
+@media (max-width: 616px) {
+    body {
+        padding: 1em 8px 1em 8px;
+    }
 }
 
 b {

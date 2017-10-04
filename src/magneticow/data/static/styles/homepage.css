@@ -1,0 +1,38 @@
+main {
+    display: flex;
+    align-items: center;
+    align-content: center;
+
+    height: calc(100vh - 2*16px - 0.833em - 23px);  /* 100vh - body's padding(s) - footer margin - footer height */
+    width: 100%;
+}
+
+@media (max-width: 616px) {
+    main {
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-start;
+    }
+}
+
+main div#magneticow {
+    white-space: nowrap;
+    margin: 0 0.5em 0.5em 0;
+}
+
+main form {
+    max-width: 600px;
+    width: 100%;
+}
+
+main form input {
+    width: 100%;
+}
+
+main > div {
+    margin-right: 0.5em;
+}
+
+footer {
+    margin-top: 0.833em;
+}

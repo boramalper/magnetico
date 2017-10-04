@@ -14,6 +14,7 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/missinggo/iter"
 	"regexp"
+	"github.com/willf/bloom"
 )
 
 
@@ -46,6 +47,21 @@ type QueryArguments struct {
 	Port int `bencode:"port,omitempty"`
 	// Use senders apparent DHT port
 	ImpliedPort int `bencode:"implied_port,omitempty"`
+
+	// Indicates whether the querying node is seeding the torrent it announces.
+	// Defined in BEP 33 "DHT Scrapes" for `announce_peer` queries.
+	Seed int `bencode:"seed,omitempty"`
+
+	// If 1, then the responding node should try to fill the `values` list with non-seed items on a
+	// best-effort basis."
+	// Defined in BEP 33 "DHT Scrapes" for `get_peers` queries.
+	NoSeed int `bencode:"noseed,omitempty"`
+	// If 1, then the responding node should add two fields to the "r" dictionary in the response:
+	//   - `BFsd`: Bloom Filter (256 bytes) representing all stored seeds for that infohash
+	//   - `BFpe`: Bloom Filter (256 bytes) representing all stored peers (leeches) for that
+	//             infohash
+	// Defined in BEP 33 "DHT Scrapes" for `get_peers` queries.
+	Scrape int `bencode:"noseed,omitempty"`
 }
 
 
@@ -58,6 +74,15 @@ type ResponseValues struct {
 	Token []byte `bencode:"token,omitempty"`
 	// Torrent peers
 	Values []CompactPeer `bencode:"values,omitempty"`
+
+	// If `scrape` is set to 1 in the `get_peers` query then the responding node should add the
+	// below two fields to the "r" dictionary in the response:
+	// Defined in BEP 33 "DHT Scrapes" for responses to `get_peers` queries.
+	// Bloom Filter (256 bytes) representing all stored seeds for that infohash:
+	BFsd *bloom.BloomFilter `bencode:"BFsd,omitempty"`
+	// Bloom Filter (256 bytes) representing all stored peers (leeches) for that infohash:
+	BFpe *bloom.BloomFilter `bencode:"BFpe,omitempty"`
+	// TODO: write marshallers for those fields above ^^
 }
 
 
@@ -204,7 +229,7 @@ func (cni *CompactNodeInfo) UnmarshalBinary(b []byte) error {
 
 
 func (cnis CompactNodeInfos) MarshalBencode() ([]byte, error) {
-	ret := make([]byte, 0)  // TODO: this doesn't look idiomatic at all, is this the right way?
+	var ret []byte
 
 	for _, cni := range cnis {
 		ret = append(ret, cni.MarshalBinary()...)

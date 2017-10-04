@@ -1,10 +1,6 @@
 package dht
 
-import (
-	"magneticod/dht/mainline"
-	"net"
-	"github.com/bradfitz/iter"
-)
+import "magneticod/dht/mainline"
 
 
 type TrawlingManager struct {
@@ -14,29 +10,20 @@ type TrawlingManager struct {
 }
 
 
-func NewTrawlingManager(mlAddrs []net.UDPAddr) *TrawlingManager {
+func NewTrawlingManager(mlAddrs []string) *TrawlingManager {
 	manager := new(TrawlingManager)
 	manager.output = make(chan mainline.TrawlingResult)
 
-	if mlAddrs != nil {
-		for _, addr := range mlAddrs {
-			manager.services = append(manager.services, mainline.NewTrawlingService(
-				addr,
-				mainline.TrawlingServiceEventHandlers{
-					OnResult: manager.onResult,
-				},
-			))
-		}
-	} else {
-		addr := net.UDPAddr{IP: []byte("\x00\x00\x00\x00"), Port: 0}
-		for range iter.N(1) {
-			manager.services = append(manager.services, mainline.NewTrawlingService(
-				addr,
-				mainline.TrawlingServiceEventHandlers{
-					OnResult: manager.onResult,
-				},
-			))
-		}
+	if mlAddrs == nil {
+		mlAddrs = []string{"0.0.0.0:0"}
+	}
+	for _, addr := range mlAddrs {
+		manager.services = append(manager.services, mainline.NewTrawlingService(
+			addr,
+			mainline.TrawlingServiceEventHandlers{
+				OnResult: manager.onResult,
+			},
+		))
 	}
 
 	for _, service := range manager.services {

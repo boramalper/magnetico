@@ -10,8 +10,8 @@ import (
 
 
 type Transport struct {
-	conn *net.UDPConn
-	laddr net.UDPAddr
+	conn    *net.UDPConn
+	laddr   *net.UDPAddr
 	started bool
 
 	// OnMessage is the function that will be called when Transport receives a packet that is
@@ -21,10 +21,13 @@ type Transport struct {
 }
 
 
-func NewTransport(laddr net.UDPAddr, onMessage func(*Message, net.Addr)) (*Transport) {
+func NewTransport(laddr string, onMessage func(*Message, net.Addr)) (*Transport) {
 	transport := new(Transport)
 	transport.onMessage = onMessage
-	transport.laddr = laddr
+	var err error; transport.laddr, err = net.ResolveUDPAddr("udp", laddr)
+	if err != nil {
+		zap.L().Panic("Could not resolve the UDP address for the trawler!", zap.Error(err))
+	}
 
 	return transport
 }
@@ -45,7 +48,7 @@ func (t *Transport) Start() {
 	t.started = true
 
 	var err error
-	t.conn, err = net.ListenUDP("udp", &t.laddr)
+	t.conn, err = net.ListenUDP("udp", t.laddr)
 	if err != nil {
 		zap.L().Fatal("Could NOT create a UDP socket!", zap.Error(err))
 	}

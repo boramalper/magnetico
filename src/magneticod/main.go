@@ -1,20 +1,23 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
 	"regexp"
+	"time"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/profile"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"persistence"
+
 	"magneticod/bittorrent"
 	"magneticod/dht"
-	"fmt"
-	"time"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type cmdFlags struct {
@@ -35,14 +38,13 @@ type cmdFlags struct {
 	LeechMlAddr   string   `long:"leech-ml-addr"  descrition:"Address to be used by the mainline DHT node for fetching README files." default:"0.0.0.0:0"`
 	LeechTimeout  uint     `long:"leech-timeout" description:"Number of integer seconds to pass before a leech timeouts." default:"300"`
 	ReadmeMaxSize uint     `long:"readme-max-size" description:"Maximum size -which must be greater than zero- of a description file in bytes." default:"20480"`
-	ReadmeRegexes []string `long:"readme-regex" description:"Regular expression(s) which will be tested against the name of the README files, in the supplied order."`
+	ReadmeRegex   string   `long:"readme-regex" description:"Regular expression(s) which will be tested against the name of the README files, in the supplied order."`
 
 	Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
 
 	Profile string `long:"profile" description:"Enable profiling." default:""`
 
-	// ==== Deprecated Flags ====
-	// TODO: don't even support deprecated flags!
+	// ==== OLD Flags ====
 
 	// DatabaseFile is akin to Database flag, except that it was used when SQLite was the only
 	// persistence backend ever conceived, so it's the path* to the database file, which was -by
@@ -53,7 +55,6 @@ type cmdFlags struct {
 	//     On BSDs?        : TODO?
 	//     On anywhere else: TODO?
 	// TODO: Is the path* absolute or can be relative as well?
-	// DatabaseFile string
 }
 
 const (
@@ -70,19 +71,17 @@ type opFlags struct {
 	TrawlerMlAddrs    []string
 	TrawlerMlInterval time.Duration
 
-	// TODO: is this even supported by anacrolix/torrent?
 	FetcherAddr    string
 	FetcherTimeout time.Duration
 
 	StatistMlAddrs   []string
 	StatistMlTimeout time.Duration
 
-	// TODO: is this even supported by anacrolix/torrent?
 	LeechClAddr   string
 	LeechMlAddr   string
 	LeechTimeout  time.Duration
 	ReadmeMaxSize uint
-	ReadmeRegexes []*regexp.Regexp
+	ReadmeRegex   *regexp.Regexp
 
 	Verbosity int
 
@@ -90,12 +89,12 @@ type opFlags struct {
 }
 
 func main() {
-	atom := zap.NewAtomicLevel()
+	loggerLevel := zap.NewAtomicLevel()
 	// Logging levels: ("debug", "info", "warn", "error", "dpanic", "panic", and "fatal").
 	logger := zap.New(zapcore.NewCore(
 		zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig()),
 		zapcore.Lock(os.Stderr),
-		atom,
+		loggerLevel,
 	))
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
@@ -111,81 +110,70 @@ func main() {
 
 	switch opFlags.Verbosity {
 	case 0:
-		atom.SetLevel(zap.WarnLevel)
+		loggerLevel.SetLevel(zap.WarnLevel)
 	case 1:
-		atom.SetLevel(zap.InfoLevel)
-	// Default: i.e. in case of 2 or more.
+		loggerLevel.SetLevel(zap.InfoLevel)
+		// Default: i.e. in case of 2 or more.
 	default:
-		atom.SetLevel(zap.DebugLevel)
+		loggerLevel.SetLevel(zap.DebugLevel)
 	}
 
 	zap.ReplaceGlobals(logger)
 
-	/*
-		updating_manager := nil
-		statistics_sink := nil
-		completing_manager := nil
-		file_sink := nil
-	*/
 	// Handle Ctrl-C gracefully.
-	interrupt_chan := make(chan os.Signal)
-	signal.Notify(interrupt_chan, os.Interrupt)
+	interruptChan := make(chan os.Signal)
+	signal.Notify(interruptChan, os.Interrupt)
 
-	database, err := NewDatabase(opFlags.Database)
+	database, err := persistence.MakeDatabase(opFlags.DatabaseURL)
 	if err != nil {
-		logger.Sugar().Fatalf("Could not open the database at `%s`: %s", opFlags.Database, err.Error())
+		logger.Sugar().Fatalf("Could not open the database at `%s`: %s", opFlags.DatabaseURL, err.Error())
 	}
 
-	trawlingManager := dht.NewTrawlingManager(opFlags.MlTrawlerAddrs)
-	metadataSink := bittorrent.NewMetadataSink(opFlags.FetcherAddr)
-	fileSink := bittorrent.NewFileSink()
-
-	go func() {
-		for {
-			select {
-			case result := <-trawlingManager.Output():
-				logger.Debug("result: ", zap.String("hash", result.InfoHash.String()))
-				if !database.DoesExist(result.InfoHash[:]) {
-					metadataSink.Sink(result)
-				}
-
-			case metadata := <-metadataSink.Drain():
-				logger.Sugar().Infof("D I S C O V E R E D: `%s` %x",
-					metadata.Name, metadata.InfoHash)
-				if err := database.AddNewTorrent(metadata); err != nil {
-					logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s",
-						metadata.InfoHash, err.Error())
-				}
-
-			case <-interrupt_chan:
-				trawlingManager.Terminate()
-				break
-			}
-		}
-	}()
-
-	go func() {
-
-	}()
-
-	go func() {
-
-	}()
-
+	trawlingManager       := dht.NewTrawlingManager(opFlags.TrawlerMlAddrs)
+	metadataSink          := bittorrent.NewMetadataSink(opFlags.FetcherAddr)
+	completingCoordinator := NewCompletingCoordinator(database, CompletingCoordinatorOpFlags{
+		LeechClAddr:   opFlags.LeechClAddr,
+		LeechMlAddr:   opFlags.LeechMlAddr,
+		LeechTimeout:  opFlags.LeechTimeout,
+		ReadmeMaxSize: opFlags.ReadmeMaxSize,
+		ReadmeRegex:   opFlags.ReadmeRegex,
+	})
 	/*
-		for {
-			select {
+	refreshingCoordinator := NewRefreshingCoordinator(database, RefreshingCoordinatorOpFlags{
 
-			case updating_manager.Output():
-
-			case statistics_sink.Sink():
-
-			case completing_manager.Output():
-
-			case file_sink.Sink():
+	})
 	*/
 
-	<-interrupt_chan
+	for {
+		select {
+		case result := <-trawlingManager.Output():
+			logger.Debug("result: ", zap.String("hash", result.InfoHash.String()))
+			exists, err := database.DoesTorrentExist(result.InfoHash[:])
+			if err != nil {
+				zap.L().Fatal("Could not check whether torrent exists!", zap.Error(err))
+			} else if !exists {
+				metadataSink.Sink(result)
+			}
+
+		case metadata := <-metadataSink.Drain():
+			if err := database.AddNewTorrent(metadata.InfoHash, metadata.Name, metadata.Files); err != nil {
+				logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s",
+					metadata.InfoHash, err.Error())
+			}
+			logger.Sugar().Infof("D I S C O V E R E D: `%s` %x", metadata.Name, metadata.InfoHash)
+
+			if readmePath := findReadme(opFlags.ReadmeRegex, metadata.Files); readmePath != nil {
+				completingCoordinator.Request(metadata.InfoHash, *readmePath, metadata.Peers)
+			}
+
+		case result := <-completingCoordinator.Output():
+			database.AddReadme(result.InfoHash, result.Path, result.Data)
+
+		case <-interruptChan:
+			trawlingManager.Terminate()
+			break
+		}
+	}
 }
 
 func parseFlags() (opF opFlags) {
@@ -237,13 +225,13 @@ func parseFlags() (opF opFlags) {
 	}
 
 	if err = checkAddrs([]string{cmdF.LeechClAddr}); err != nil {
-		zap.S().Fatal("Of argument `leech-cl-addr` %s", err.Error())
+		zap.S().Fatalf("Of argument `leech-cl-addr` %s", err.Error())
 	} else {
 		opF.LeechClAddr = cmdF.LeechClAddr
 	}
 
 	if err = checkAddrs([]string{cmdF.LeechMlAddr}); err != nil {
-		zap.S().Fatal("Of argument `leech-ml-addr` %s", err.Error())
+		zap.S().Fatalf("Of argument `leech-ml-addr` %s", err.Error())
 	} else {
 		opF.LeechMlAddr = cmdF.LeechMlAddr
 	}
@@ -260,13 +248,9 @@ func parseFlags() (opF opFlags) {
 		opF.ReadmeMaxSize = cmdF.ReadmeMaxSize
 	}
 
-	for i, s := range cmdF.ReadmeRegexes {
-		regex, err := regexp.Compile(s)
-		if err != nil {
-			zap.S().Fatalf("Of argument `readme-regex` with %d(th) regex `%s`: %s", i + 1, s, err.Error())
-		} else {
-			opF.ReadmeRegexes = append(opF.ReadmeRegexes, regex)
-		}
+	opF.ReadmeRegex, err = regexp.Compile(cmdF.ReadmeRegex)
+	if err != nil {
+		zap.S().Fatalf("Argument `readme-regex` is not a valid regex: %s", err.Error())
 	}
 
 	opF.Verbosity = len(cmdF.Verbose)
@@ -282,6 +266,18 @@ func checkAddrs(addrs []string) error {
 		_, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
 			return fmt.Errorf("with %d(th) address `%s`: %s", i + 1, addr, err.Error())
+		}
+	}
+	return nil
+}
+
+// findReadme looks for a possible Readme file whose path is matched by the pathRegex.
+// If there are multiple matches, the first one is returned.
+// If there are no matches, nil returned.
+func findReadme(pathRegex *regexp.Regexp, files []persistence.File) *string {
+	for _, file := range files {
+		if pathRegex.MatchString(file.Path) {
+			return &file.Path
 		}
 	}
 	return nil
