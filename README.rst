@@ -83,6 +83,12 @@ Installation Instructions
     (violence, pornography, copyright infringing content, and even child-pornography). If you are afraid of the legal
     consequences, or simply morally against (indirectly) assisting those content to spread around, follow the
     **magneticow** installation instructions carefully to password-protect the web-interface from others.
+\
+
+    **WARNING:**
+
+    Do NOT clone the `repository <https://github.com/boramalper/magnetico>`_ to install **magnetico**, as it is never meant to be stable (except `releases <https://github.com/boramalper/magnetico/releases>`_ of course).
+
 
 1. Install **magneticod** first by following its
    `installation instruction <magneticod/README.rst>`_.
