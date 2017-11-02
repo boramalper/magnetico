@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0">
+    <channel>
+        <title>{{ .Title }}</title>
+        {{ range .Items }}
+        <item>
+            <title>{{ .Title }}</title>
+            <guid>{{ .InfoHash }}</guid>
+            <enclosure url="magnet:?xt=urn:btih:{{ .InfoHash }}&amp;dn={{ .Title }}" type="application/x-bittorrent" />
+        </item>
+        {{ end }}
+    </channel>
+</rss>

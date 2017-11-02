@@ -1,0 +1,121 @@
+@font-face {
+    font-family: 'Noto Sans';
+    src: url('../fonts/NotoSansUI/Regular.ttf');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Noto Sans';
+    src: url('../fonts/NotoSansUI/Bold.ttf');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Noto Sans';
+    src: url('../fonts/NotoSansUI/Italic.ttf');
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Noto Sans';
+    src: url('../fonts/NotoSansUI/BoldItalic.ttf');
+    font-weight: bold;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Noto Mono';
+    src: url('../fonts/NotoMono/Regular.ttf');
+    font-weight: normal;
+    font-style: monospace;
+}
+
+
+html {
+    font-family: 'Noto Sans', sans-serif;
+}
+
+pre {
+    font-family: 'Noto Mono';
+    line-height: 1.2em;
+}
+
+body {
+    padding: 1em 3em 1em 3em;
+    font-weight: 400;
+    line-height: 1.45;
+}
+
+b {
+    font-weight: bold;
+}
+
+/* Source: http://type-scale.com/  (using 1.200 - Minor Third Scale) */
+html {
+    font-size: 1em;
+}
+
+p {
+    margin-bottom: 1.3em;
+}
+
+h1, h2, h3, h4 {
+    margin: 1.414em 0 0.5em;
+    font-weight: inherit;
+    line-height: 1.2;
+}
+
+h1 {
+    margin-top: 0;
+    font-size: 2.074em;
+}
+
+h2 {
+    font-size: 1.728em;
+}
+
+h3 {
+    font-size: 1.44em;
+}
+
+h4 {
+    font-size: 1.2em;
+}
+
+small {
+    font-size: 0.833em;
+}
+
+
+/* Source: https://gist.github.com/unruthless/413930 */
+sub, sup {
+  /* Specified in % so that the sup/sup is the
+     right size relative to the surrounding text */
+  font-size: 75%;
+
+  /* Zero out the line-height so that it doesn't
+     interfere with the positioning that follows */
+  line-height: 0;
+
+  /* Where the magic happens: makes all browsers position
+     the sup/sup properly, relative to the surrounding text */
+  position: relative;
+
+  /* Note that if you're using Eric Meyer's reset.css, this
+     is already set and you can remove this rule */
+  vertical-align: baseline;
+}
+
+sup {
+  /* Move the superscripted text up */
+  top: -0.5em;
+}
+
+sub {
+  /* Move the subscripted text down, but only
+     half as far down as the superscript moved up */
+  bottom: -0.25em;
+}

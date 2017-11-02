@@ -1,0 +1,27 @@
+main {
+    display: flex;
+    align-items: center;
+    align-content: center;
+
+    height: calc(100vh - 2 * 3em);
+    width: calc(100vw - 2 * 3em);
+}
+
+main form {
+    max-width: 600px;
+    width: 100%;
+
+    margin-left: 0.5em;
+}
+
+main form input {
+    width: 100%;
+}
+
+main > div {
+    margin-right: 0.5em;
+}
+
+footer {
+    margin-top: 0.833em;
+}
