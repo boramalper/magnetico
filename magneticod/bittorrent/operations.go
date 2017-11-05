@@ -150,7 +150,15 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 			)
 			return
 		}
+
+		// The messages we are interested in have the length of AT LEAST two bytes
+		// (TODO: actually a bit more than that but SURELY when it's less than two bytes, the
+		//        program panics)
 		rLength := bigEndianToInt(rLengthB)
+		if rLength < 2 {
+			continue
+		}
+
 		rMessage, err := readExactly(conn, rLength)
 		if err != nil {
 			zap.L().Debug(
