@@ -77,7 +77,7 @@ func (s *TrawlingService) Terminate() {
 }
 
 func (s *TrawlingService) trawl() {
-	for range time.Tick(1 * time.Second) {
+	for range time.Tick(3 * time.Second) {
 		s.routingTableMutex.Lock()
 		if len(s.routingTable) == 0 {
 			s.bootstrap()
