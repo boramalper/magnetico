@@ -15,6 +15,7 @@ import (
 	"magnetico/magneticod/dht"
 
 	"magnetico/persistence"
+	"encoding/hex"
 )
 
 type cmdFlags struct {
@@ -85,7 +86,7 @@ func main() {
 	for stopped := false; !stopped; {
 		select {
 		case result := <-trawlingManager.Output():
-			logger.Info("result: ", zap.String("hash", result.InfoHash.String()))
+			zap.L().Info("Trawled!", zap.String("infoHash", result.InfoHash.String()))
 			exists, err := database.DoesTorrentExist(result.InfoHash[:])
 			if err != nil {
 				zap.L().Fatal("Could not check whether torrent exists!", zap.Error(err))
@@ -98,7 +99,7 @@ func main() {
 				logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s",
 					metadata.InfoHash, err.Error())
 			}
-			logger.Sugar().Infof("D I S C O V E R E D: `%s` %x", metadata.Name, metadata.InfoHash)
+			zap.L().Info("Fetched!", zap.String("name", metadata.Name), zap.String("infoHash", hex.EncodeToString(metadata.InfoHash)))
 
 		case <-interruptChan:
 			trawlingManager.Terminate()
