@@ -235,10 +235,11 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 		} else if rMessage[1] == 0x01 {
 			// __on_ext_message(message[2:])
 			// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+			// Run TestDecoder() function in operations_test.go in case you have any doubts.
 			rMessageBuf := bytes.NewBuffer(rMessage[2:])
 			rExtDict := new(extDict)
-			// TODO: We monkey-patched anacrolix/torrent!
-			err := bencode.NewDecoder2(rMessageBuf).Decode(rExtDict)
+			err := bencode.NewDecoder(rMessageBuf).Decode(rExtDict)
 			if err != nil {
 				zap.L().Warn("Couldn't decode extension message in the loop!", zap.Error(err))
 				return
