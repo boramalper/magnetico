@@ -1,0 +1,28 @@
+version: "{branch}-{build}"
+
+platform: x64
+
+branches:
+  only:
+    - go-rewrite
+
+# Source Config
+clone_folder: c:\gopath\src\github.com\boramalper\magnetico
+
+# Build host
+
+environment:
+  GOPATH: c:\gopath
+  GOVERSION: 1.9.2
+
+install:
+  # Install the specific Go version.
+  - rmdir c:\go /s /q
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go%GOVERSION%.windows-amd64.msi
+  - msiexec /i go%GOVERSION%.windows-amd64.msi /q
+  - set Path=c:\go\bin;c:\gopath\bin
+  - go version
+  - go env
+
+build_script:
+  - go install magnetico/magneticod
