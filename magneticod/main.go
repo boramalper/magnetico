@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"magnetico/magneticod/dht"
 
 	"magnetico/persistence"
-	"encoding/hex"
+	"runtime/pprof"
 )
 
 type cmdFlags struct {
@@ -25,6 +26,7 @@ type cmdFlags struct {
 	TrawlerMlInterval uint     `long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
 
 	Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
+	Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
 }
 
 type opFlags struct {
@@ -34,6 +36,7 @@ type opFlags struct {
 	TrawlerMlInterval time.Duration
 
 	Verbosity int
+	Profile string
 }
 
 func main() {
@@ -69,6 +72,23 @@ func main() {
 	}
 
 	zap.ReplaceGlobals(logger)
+
+	switch opFlags.Profile {
+	case "cpu":
+		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE | os.O_WRONLY, 0755)
+		if err != nil {
+			zap.L().Panic("Could not open the cpu profile file!", zap.Error(err))
+		}
+		pprof.StartCPUProfile(file)
+		defer file.Close()
+		defer pprof.StopCPUProfile()
+
+	case "memory":
+		zap.L().Panic("NOT IMPLEMENTED")
+
+	case "trace":
+		zap.L().Panic("NOT IMPLEMENTED")
+	}
 
 	// Handle Ctrl-C gracefully.
 	interruptChan := make(chan os.Signal)
@@ -141,6 +161,8 @@ func parseFlags() (*opFlags, error) {
 	}
 
 	opF.Verbosity = len(cmdF.Verbose)
+
+	opF.Profile = cmdF.Profile
 
 	return opF, nil
 }
