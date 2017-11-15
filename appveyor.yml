@@ -7,10 +7,10 @@ branches:
     - go-rewrite
 
 # Source Config
-clone_folder: c:\gopath\src\github.com\boramalper\magnetico
+clone_folder: c:\gopath\src\magnetico
+shallow_clone: true
 
 # Build host
-
 environment:
   GOPATH: c:\gopath
   GOVERSION: 1.9.2
@@ -25,4 +25,10 @@ install:
   - go env
 
 build_script:
-  - go install github.com/magnetico/magneticod
+  - go install magnetico/magneticod
+  - go install magnetico/magneticow
+
+test_script:
+  - go test -cover magnetico/magneticod/...
+  - go test -cover magnetico/magneticow/...
+  - go test -cover magnetico/persistence/...

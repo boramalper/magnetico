@@ -17,10 +17,12 @@ import (
 
 	"magnetico/persistence"
 	"runtime/pprof"
+	"github.com/Wessie/appdirs"
+	"path"
 )
 
 type cmdFlags struct {
-	DatabaseURL string `long:"database" description:"URL of the database." required:"yeah"`
+	DatabaseURL string `long:"database" description:"URL of the database."`
 
 	TrawlerMlAddrs    []string `long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
 	TrawlerMlInterval uint     `long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
@@ -142,7 +144,10 @@ func parseFlags() (*opFlags, error) {
 	}
 
 	if cmdF.DatabaseURL == "" {
-		zap.S().Fatal("database")
+		opF.DatabaseURL = "sqlite3://" + path.Join(
+				appdirs.UserDataDir("magneticod", "", "", false),
+				"database.sqlite3",
+			)
 	} else {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}
