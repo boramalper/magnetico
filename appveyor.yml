@@ -20,7 +20,7 @@ install:
   # Install the specific Go version.
   - rmdir c:\go /s /q
   - appveyor DownloadFile https://storage.googleapis.com/golang/go%GOVERSION%.windows-amd64.msi
-  - appveyor DownloadFile https://github.com/golang/dep/releases/download/v%DEPVERSION%/dep-windows-amd64 -FileName c:\go\bin\dep
+  - appveyor DownloadFile https://github.com/golang/dep/releases/download/v%DEPVERSION%/dep-windows-amd64 -FileName c:\dep
   - msiexec /i go%GOVERSION%.windows-amd64.msi /q
   - set Path=c:\go\bin;c:\gopath\bin
   - go version
@@ -30,7 +30,7 @@ install:
 before_build:
   - go-bindata -o="magneticow/bindata.go" -prefix="magneticow/data/" magneticow/data/...
   - cd c:\gopath\src\magnetico
-  - dep ensure -v
+  - c:\dep ensure -v
 
 build_script:
   - go install magnetico/magneticod
