@@ -14,6 +14,7 @@ shallow_clone: true
 environment:
   GOPATH: c:\gopath
   GOVERSION: 1.9.2
+  DEPVERSION: 0.3.2
 
 install:
   # Install the specific Go version.
@@ -23,6 +24,13 @@ install:
   - set Path=c:\go\bin;c:\gopath\bin
   - go version
   - go env
+  - appveyor DownloadFile https://github.com/golang/dep/releases/download/v%DEPVERSION%/dep-windows-amd64 -FileName c:\go\bin\dep
+  - go get -u github.com/jteeuwen/go-bindata/...
+
+before_build:
+  - go-bindata -o="magneticow/bindata.go" -prefix="magneticow/data/" magneticow/data/...
+  - cd c:\gopath\src\magnetico
+  - dep ensure -v
 
 build_script:
   - go install magnetico/magneticod
