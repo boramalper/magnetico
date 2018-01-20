@@ -19,6 +19,8 @@ import (
 	"runtime/pprof"
 	"github.com/Wessie/appdirs"
 	"path"
+	"strings"
+	"runtime"
 )
 
 type cmdFlags struct {
@@ -148,6 +150,9 @@ func parseFlags() (*opFlags, error) {
 				appdirs.UserDataDir("magneticod", "", "", false),
 				"database.sqlite3",
 			)
+		if runtime.GOOS == "windows" {
+			opF.DatabaseURL = strings.Replace(opF.DatabaseURL, "\\", "/", -1)
+		}
 	} else {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}
