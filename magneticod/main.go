@@ -21,20 +21,24 @@ import (
 	"path"
 	"strings"
 	"runtime"
+	"encoding/json"
 )
 
 type cmdFlags struct {
-	DatabaseURL string `long:"database" description:"URL of the database."`
+	DatabaseURL string `json:"database" long:"database" description:"URL of the database."`
+	DatabaseEngine string `json:"dbengine" long:"dbengine" description:"Database Type currently supports sqlite and mysql"`
 
-	TrawlerMlAddrs    []string `long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
-	TrawlerMlInterval uint     `long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
+	TrawlerMlAddrs    []string `json:"trawler-ml-addr" long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
+	TrawlerMlInterval uint     `json:"trawler-ml-interval" long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
 
-	Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
-	Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
+	Verbose []bool `json:"verbose" short:"v" long:"verbose" description:"Increases verbosity."`
+	Profile string `json:"profile" long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
+
 }
 
 type opFlags struct {
 	DatabaseURL string
+	DatabaseEngine string
 
 	TrawlerMlAddrs    []string
 	TrawlerMlInterval time.Duration
@@ -42,6 +46,9 @@ type opFlags struct {
 	Verbosity int
 	Profile string
 }
+
+
+
 
 func main() {
 	loggerLevel := zap.NewAtomicLevel()
@@ -53,6 +60,7 @@ func main() {
 	))
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
+
 
 	// opFlags is the "operational flags"
 	opFlags, err := parseFlags()
@@ -140,9 +148,31 @@ func parseFlags() (*opFlags, error) {
 	opF := new(opFlags)
 	cmdF := new(cmdFlags)
 
+
+	//Load the config file if it exists
+
+	if Exists("conf.json") {
+		file, _ := os.Open("conf.json")
+		decoder := json.NewDecoder(file)
+
+		err := decoder.Decode(&cmdF)
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+	}
+
+
+	//if commandline params were specified then overlay them on top of the config file
+	//the reasoning is that we can override config params by calling with command line params for testing
+
 	_, err := flags.Parse(cmdF)
 	if err != nil {
 		return nil, err
+	}
+
+	if cmdF.DatabaseEngine == "" {
+		//set default to sqlite
+		opF.DatabaseEngine = "SQLITE"
 	}
 
 	if cmdF.DatabaseURL == "" {
@@ -174,6 +204,15 @@ func parseFlags() (*opFlags, error) {
 
 	opF.Profile = cmdF.Profile
 
+	e, err := json.MarshalIndent(opF,"", "\t")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("Current Configuration:")
+	fmt.Println(string(e))
+
+	os.Exit(3)
 	return opF, nil
 }
 
@@ -187,4 +226,13 @@ func checkAddrs(addrs []string) error {
 		}
 	}
 	return nil
+}
+
+func Exists(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
 }

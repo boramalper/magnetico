@@ -67,6 +67,7 @@ type databaseEngine uint8
 
 const (
 	SQLITE3_ENGINE databaseEngine = 1
+	MYSQL_ENGINE databaseEngine = 2
 )
 
 type Statistics struct {
