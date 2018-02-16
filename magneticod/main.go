@@ -211,8 +211,7 @@ func parseFlags() (*opFlags, error) {
 
 	fmt.Println("Current Configuration:")
 	fmt.Println(string(e))
-
-	os.Exit(3)
+	
 	return opF, nil
 }
 
