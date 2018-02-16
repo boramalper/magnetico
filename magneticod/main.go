@@ -26,7 +26,6 @@ import (
 
 type cmdFlags struct {
 	DatabaseURL string `json:"database" long:"database" description:"URL of the database."`
-	DatabaseEngine string `json:"dbengine" long:"dbengine" description:"Database Type currently supports sqlite and mysql"`
 
 	TrawlerMlAddrs    []string `json:"trawler-ml-addr" long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
 	TrawlerMlInterval uint     `json:"trawler-ml-interval" long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
@@ -38,7 +37,6 @@ type cmdFlags struct {
 
 type opFlags struct {
 	DatabaseURL string
-	DatabaseEngine string
 
 	TrawlerMlAddrs    []string
 	TrawlerMlInterval time.Duration
@@ -170,10 +168,7 @@ func parseFlags() (*opFlags, error) {
 		return nil, err
 	}
 
-	if cmdF.DatabaseEngine == "" {
-		//set default to sqlite
-		opF.DatabaseEngine = "SQLITE"
-	}
+
 
 	if cmdF.DatabaseURL == "" {
 		opF.DatabaseURL = "sqlite3://" + path.Join(
@@ -186,6 +181,7 @@ func parseFlags() (*opFlags, error) {
 	} else {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}
+
 
 	if err = checkAddrs(cmdF.TrawlerMlAddrs); err != nil {
 		zap.S().Fatalf("Of argument (list) `trawler-ml-addr` %s", err.Error())
@@ -204,14 +200,14 @@ func parseFlags() (*opFlags, error) {
 
 	opF.Profile = cmdF.Profile
 
-	e, err := json.MarshalIndent(opF,"", "\t")
+	e, err := json.MarshalIndent(cmdF,"", "\t")
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	fmt.Println("Current Configuration:")
 	fmt.Println(string(e))
-	
+	//os.Exit(1)
 	return opF, nil
 }
 

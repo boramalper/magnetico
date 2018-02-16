@@ -111,7 +111,7 @@ func MakeDatabase(rawURL string, enableFTS bool, logger *zap.Logger) (Database, 
 		return nil, fmt.Errorf("postgresql is not yet supported!")
 
 	case "mysql":
-		return nil, fmt.Errorf("mysql is not yet supported!")
+		return makemySQLDatabase(url_, enableFTS)
 	}
 
 	return nil, fmt.Errorf("unknown URI scheme (database engine)!")

@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
-	"os"
-	"path"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -23,11 +21,6 @@ func (db *mySQLDatabase) Engine() databaseEngine {
 
 func makemySQLDatabase(url_ *url.URL, enableFTS bool) (Database, error) {
 	db := new(mySQLDatabase)
-
-	dbDir, _ := path.Split(url_.Path)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		return nil, fmt.Errorf("for directory `%s`:  %s", dbDir, err.Error())
-	}
 
 	var err error
 	db.conn, err = sql.Open("mysql", url_.Path)
@@ -242,30 +235,6 @@ func (db *mySQLDatabase) commitQueuedTorrents() error {
 }
 
 func (db *mySQLDatabase) setupDatabase() error {
-	// Enable Write-Ahead Logging for SQLite as "WAL provides more concurrency as readers do not
-	// block writers and a writer does not block readers. Reading and writing can proceed
-	// concurrently."
-	// Caveats:
-	//   * Might be unsupported by OSes other than Windows and UNIXes.
-	//   * Does not work over a network filesystem.
-	//   * Transactions that involve changes against multiple ATTACHed databases are not atomic
-	//     across all databases as a set.
-	// See: https://www.sqlite.org/wal.html
-	//
-	// Force SQLite to use disk, instead of memory, for all temporary files to reduce the memory
-	// footprint.
-	//
-	// Enable foreign key constraints in SQLite which are crucial to prevent programmer errors on
-	// our side.
-	_, err := db.conn.Exec(`
-		PRAGMA journal_mode=WAL;
-		PRAGMA temp_store=1;
-		PRAGMA foreign_keys=ON;
-		PRAGMA encoding="UTF-8";
-	`)
-	if err != nil {
-		return fmt.Errorf("sql.DB.Exec (PRAGMAs): %s", err.Error())
-	}
 
 	tx, err := db.conn.Begin()
 	if err != nil {
@@ -280,101 +249,34 @@ func (db *mySQLDatabase) setupDatabase() error {
 	// Essential, and valid for all user_version`s:
 	// TODO: "torrent_id" column of the "files" table can be NULL, how can we fix this in a new schema?
 	_, err = tx.Exec(`
-		CREATE TABLE IF NOT EXISTS torrents (
-			id             INTEGER PRIMARY KEY,
-			info_hash      BLOB NOT NULL UNIQUE,
-			name           TEXT NOT NULL,
-			total_size     INTEGER NOT NULL CHECK(total_size > 0),
-			discovered_on  INTEGER NOT NULL CHECK(discovered_on > 0)
-		);
-		CREATE TABLE IF NOT EXISTS files (
-			id          INTEGER PRIMARY KEY,
-			torrent_id  INTEGER REFERENCES torrents ON DELETE CASCADE ON UPDATE RESTRICT,
-			size        INTEGER NOT NULL,
-			path        TEXT NOT NULL
-		);
+	CREATE TABLE IF NOT EXISTS torrents (
+	  id int(11) NOT NULL AUTO_INCREMENT,
+	  infohash tinyblob NOT NULL,
+	  name text CHARACTER SET utf8 NOT NULL,
+	  totalsize int(11) NOT NULL,
+	  discovered_on int(11) NOT NULL,
+	  updated_on int(11) DEFAULT NULL,
+	  n_seeders int(11) DEFAULT NULL,
+	  n_leechers int(11) DEFAULT NULL,
+	  PRIMARY KEY (id) USING BTREE
+	) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+
+	CREATE TABLE IF NOT EXISTS files (
+	  id int(11) NOT NULL AUTO_INCREMENT,
+	  torrent_id int(11) NOT NULL,
+	  size int(11) NOT NULL,
+	  path text CHARACTER SET utf8 NOT NULL,
+	  is_readme int(11) DEFAULT NULL,
+	  content text,
+	  PRIMARY KEY (id),
+	  UNIQUE KEY readme_index (torrent_id,is_readme),
+	  KEY torrentid_id (torrent_id),
+	  FOREIGN KEY (torrent_id) REFERENCES torrents (id) ON DELETE CASCADE
+	) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 	`)
 	if err != nil {
 		return fmt.Errorf("sql.Tx.Exec (v0): %s", err.Error())
-	}
-
-	// Get the user_version:
-	rows, err := tx.Query("PRAGMA user_version;")
-	if err != nil {
-		return fmt.Errorf("sql.Tx.Query (user_version): %s", err.Error())
-	}
-	var userVersion int
-	if rows.Next() != true {
-		return fmt.Errorf("sql.Rows.Next (user_version): PRAGMA user_version did not return any rows!")
-	}
-	if err = rows.Scan(&userVersion); err != nil {
-		return fmt.Errorf("sql.Rows.Scan (user_version): %s", err.Error())
-	}
-	// Close your rows lest you get "database table is locked" error(s)!
-	// See https://github.com/mattn/go-mySQL/issues/2741
-	if err = rows.Close(); err != nil {
-		return fmt.Errorf("sql.Rows.Close (user_version): %s", err.Error())
-	}
-
-	switch userVersion {
-	case 0:
-		// Upgrade from user_version 0 to 1
-		// Changes:
-		//   * `info_hash_index` is recreated as UNIQUE.
-		zap.L().Warn("Updating database schema from 0 to 1... (this might take a while)")
-		_, err = tx.Exec(`
-			DROP INDEX IF EXISTS info_hash_index;
-			CREATE UNIQUE INDEX info_hash_index ON torrents	(info_hash);
-			PRAGMA user_version = 1;
-		`)
-		if err != nil {
-			return fmt.Errorf("sql.Tx.Exec (v0 -> v1): %s", err.Error())
-		}
-		fallthrough
-
-	case 1:
-		// Upgrade from user_version 1 to 2
-		// Changes:
-		//   * Added `n_seeders`, `n_leechers`, and `updated_on` columns to the `torrents` table, and
-		//     the constraints they entail.
-		//   * Added `is_readme` and `content` columns to the `files` table, and the constraints & the
-		//     the indices they entail.
-		//     * Added unique index `readme_index`  on `files` table.
-		zap.L().Warn("Updating database schema from 1 to 2... (this might take a while)")
-		// We introduce two new columns in `files`: content BLOB, and is_readme INTEGER which we
-		// treat as a bool (NULL for false, and 1 for true; see the CHECK statement).
-		// The reason for the change is that as we introduce the new "readme" feature which
-		// downloads a readme file as a torrent descriptor, we needed to store it somewhere in the
-		// database with the following conditions:
-		//
-		//   1. There can be one and only one readme (content) for a given torrent; hence the
-		//      UNIQUE INDEX on (torrent_id, is_description) (remember that SQLite treats each NULL
-		//      value as distinct [UNIQUE], see https://sqlite.org/nulls.html).
-		//   2. We would like to keep the readme (content) associated with the file it came from;
-		//      hence we modify the files table instead of the torrents table.
-		//
-		// Regarding the implementation details, following constraints arise:
-		//
-		//   1. The column is_readme is either NULL or 1, and if it is 1, then column content cannot
-		//      be NULL (but might be an empty BLOB). Vice versa, if column content of a row is,
-		//      NULL then column is_readme must be NULL.
-		//
-		//      This is to prevent unused content fields filling up the database, and to catch
-		//      programmers' errors.
-		_, err = tx.Exec(`
-			ALTER TABLE torrents ADD COLUMN updated_on INTEGER CHECK (updated_on > 0) DEFAULT NULL;
-			ALTER TABLE torrents ADD COLUMN n_seeders  INTEGER CHECK ((updated_on IS NOT NULL AND n_seeders >= 0) OR (updated_on IS NULL AND n_seeders IS NULL)) DEFAULT NULL;
-			ALTER TABLE torrents ADD COLUMN n_leechers INTEGER CHECK ((updated_on IS NOT NULL AND n_leechers >= 0) OR (updated_on IS NULL AND n_leechers IS NULL)) DEFAULT NULL;
-
-			ALTER TABLE files ADD COLUMN is_readme INTEGER CHECK (is_readme IS NULL OR is_readme=1) DEFAULT NULL;
-			ALTER TABLE files ADD COLUMN content   TEXT    CHECK ((content IS NULL AND is_readme IS NULL) OR (content IS NOT NULL AND is_readme=1)) DEFAULT NULL;
-			CREATE UNIQUE INDEX readme_index ON files (torrent_id, is_readme);
-
-			PRAGMA user_version = 2;
-		`)
-		if err != nil {
-			return fmt.Errorf("sql.Tx.Exec (v1 -> v2): %s", err.Error())
-		}
 	}
 
 	if err = tx.Commit(); err != nil {
