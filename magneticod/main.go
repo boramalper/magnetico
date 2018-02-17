@@ -19,16 +19,20 @@ import (
 	"runtime/pprof"
 	"github.com/Wessie/appdirs"
 	"path"
+	"strings"
+	"runtime"
+	"encoding/json"
 )
 
 type cmdFlags struct {
-	DatabaseURL string `long:"database" description:"URL of the database."`
+	DatabaseURL string `json:"database" long:"database" description:"URL of the database."`
 
-	TrawlerMlAddrs    []string `long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
-	TrawlerMlInterval uint     `long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
+	TrawlerMlAddrs    []string `json:"trawler-ml-addr" long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
+	TrawlerMlInterval uint     `json:"trawler-ml-interval" long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
 
-	Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
-	Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
+	Verbose []bool `json:"verbose" short:"v" long:"verbose" description:"Increases verbosity."`
+	Profile string `json:"profile" long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
+
 }
 
 type opFlags struct {
@@ -41,6 +45,9 @@ type opFlags struct {
 	Profile string
 }
 
+
+
+
 func main() {
 	loggerLevel := zap.NewAtomicLevel()
 	// Logging levels: ("debug", "info", "warn", "error", "dpanic", "panic", and "fatal").
@@ -52,6 +59,7 @@ func main() {
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
 
+
 	// opFlags is the "operational flags"
 	opFlags, err := parseFlags()
 	if err != nil {
@@ -59,7 +67,7 @@ func main() {
 		return
 	}
 
-	zap.L().Info("magneticod v0.7.0 has been started.")
+	zap.L().Info("magneticod v0.7.1 has been started.")
 	zap.L().Info("Copyright (C) 2017  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 
@@ -138,19 +146,42 @@ func parseFlags() (*opFlags, error) {
 	opF := new(opFlags)
 	cmdF := new(cmdFlags)
 
+
+	//Load the config file if it exists
+
+	if Exists("conf.json") {
+		file, _ := os.Open("conf.json")
+		decoder := json.NewDecoder(file)
+
+		err := decoder.Decode(&cmdF)
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+	}
+
+
+	//if commandline params were specified then overlay them on top of the config file
+	//the reasoning is that we can override config params by calling with command line params for testing
+
 	_, err := flags.Parse(cmdF)
 	if err != nil {
 		return nil, err
 	}
+
+
 
 	if cmdF.DatabaseURL == "" {
 		opF.DatabaseURL = "sqlite3://" + path.Join(
 				appdirs.UserDataDir("magneticod", "", "", false),
 				"database.sqlite3",
 			)
+		if runtime.GOOS == "windows" {
+			opF.DatabaseURL = strings.Replace(opF.DatabaseURL, "\\", "/", -1)
+		}
 	} else {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}
+
 
 	if err = checkAddrs(cmdF.TrawlerMlAddrs); err != nil {
 		zap.S().Fatalf("Of argument (list) `trawler-ml-addr` %s", err.Error())
@@ -169,6 +200,14 @@ func parseFlags() (*opFlags, error) {
 
 	opF.Profile = cmdF.Profile
 
+	e, err := json.MarshalIndent(cmdF,"", "\t")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("Current Configuration:")
+	fmt.Println(string(e))
+	//os.Exit(1)
 	return opF, nil
 }
 
@@ -182,4 +221,13 @@ func checkAddrs(addrs []string) error {
 		}
 	}
 	return nil
+}
+
+func Exists(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
 }

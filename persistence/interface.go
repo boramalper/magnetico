@@ -67,6 +67,7 @@ type databaseEngine uint8
 
 const (
 	SQLITE3_ENGINE databaseEngine = 1
+	MYSQL_ENGINE databaseEngine = 2
 )
 
 type Statistics struct {
@@ -110,7 +111,8 @@ func MakeDatabase(rawURL string, enableFTS bool, logger *zap.Logger) (Database, 
 		return nil, fmt.Errorf("postgresql is not yet supported!")
 
 	case "mysql":
-		return nil, fmt.Errorf("mysql is not yet supported!")
+
+		return makeMySQLDatabase(url_, enableFTS)
 	}
 
 	return nil, fmt.Errorf("unknown URI scheme (database engine)!")
