@@ -9,6 +9,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"math"
+	"strings"
 )
 
 type mySQLDatabase struct {
@@ -19,11 +20,11 @@ func (db *mySQLDatabase) Engine() databaseEngine {
 	return MYSQL_ENGINE
 }
 
-func makemySQLDatabase(url_ *url.URL, enableFTS bool) (Database, error) {
+func makeMySQLDatabase(url_ *url.URL, enableFTS bool) (Database, error) {
 	db := new(mySQLDatabase)
 
 	var err error
-	db.conn, err = sql.Open("mysql", url_.Path)
+	db.conn, err = sql.Open("mysql", strings.Replace(url_.String(), "mysql://", "", -1))
 	if err != nil {
 		return nil, fmt.Errorf("sql.Open: %s", err.Error())
 	}
@@ -131,7 +132,6 @@ func (db *mySQLDatabase) AddNewTorrent(infoHash []byte, name string, files []Fil
 
 	return nil
 }
-
 
 func (db *mySQLDatabase) Close() error {
 	return db.conn.Close()
@@ -249,32 +249,37 @@ func (db *mySQLDatabase) setupDatabase() error {
 	// Essential, and valid for all user_version`s:
 	// TODO: "torrent_id" column of the "files" table can be NULL, how can we fix this in a new schema?
 	_, err = tx.Exec(`
-	CREATE TABLE IF NOT EXISTS torrents (
-	  id int(11) NOT NULL AUTO_INCREMENT,
-	  infohash tinyblob NOT NULL,
-	  name text CHARACTER SET utf8 NOT NULL,
-	  totalsize int(11) NOT NULL,
-	  discovered_on int(11) NOT NULL,
-	  updated_on int(11) DEFAULT NULL,
-	  n_seeders int(11) DEFAULT NULL,
-	  n_leechers int(11) DEFAULT NULL,
-	  PRIMARY KEY (id) USING BTREE
-	) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
-
-	CREATE TABLE IF NOT EXISTS files (
-	  id int(11) NOT NULL AUTO_INCREMENT,
-	  torrent_id int(11) NOT NULL,
-	  size int(11) NOT NULL,
-	  path text CHARACTER SET utf8 NOT NULL,
-	  is_readme int(11) DEFAULT NULL,
-	  content text,
-	  PRIMARY KEY (id),
-	  UNIQUE KEY readme_index (torrent_id,is_readme),
-	  KEY torrentid_id (torrent_id),
-	  FOREIGN KEY (torrent_id) REFERENCES torrents (id) ON DELETE CASCADE
-	) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+		CREATE TABLE IF NOT EXISTS torrents (
+		  id INT(11) NOT NULL AUTO_INCREMENT,
+		  info_hash TINYBLOB NOT NULL,
+		  name TEXT CHARACTER SET utf8 NOT NULL,
+		  total_size BIGINT NOT NULL,
+		  discovered_on INT(11) NOT NULL,
+		  updated_on INT(11) DEFAULT NULL,
+		  n_seeders INT(11) DEFAULT NULL,
+		  n_leechers INT(11) DEFAULT NULL,
+		  PRIMARY KEY (id) USING BTREE
+		) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 	`)
+
+	if err != nil {
+		return fmt.Errorf("sql.Tx.Exec (v0): %s", err.Error())
+	}
+	_, err = tx.Exec(`
+		 CREATE TABLE IF NOT EXISTS files (
+				  id INT(11) NOT NULL AUTO_INCREMENT,
+				  torrent_id INT(11) NOT NULL,
+				  size BIGINT NOT NULL,
+				  path TEXT CHARACTER SET utf8 NOT NULL,
+				  is_readme INT(11) DEFAULT NULL,
+				  content TEXT,
+				  PRIMARY KEY (id),
+				  UNIQUE KEY readme_index (torrent_id,is_readme),
+				  KEY torrentid_id (torrent_id),
+				  FOREIGN KEY (torrent_id) REFERENCES torrents (id) ON DELETE CASCADE
+				) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+ 	`)
+
 	if err != nil {
 		return fmt.Errorf("sql.Tx.Exec (v0): %s", err.Error())
 	}
