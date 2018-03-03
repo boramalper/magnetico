@@ -74,7 +74,7 @@ type TorrentMetadata struct {
 	NFiles       uint
 }
 
-func MakeDatabase(rawURL string, enableFTS bool, logger *zap.Logger) (Database, error) {
+func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 	if logger != nil {
 		zap.ReplaceGlobals(logger)
 	}
@@ -86,7 +86,7 @@ func MakeDatabase(rawURL string, enableFTS bool, logger *zap.Logger) (Database, 
 
 	switch url_.Scheme {
 	case "sqlite3":
-		return makeSqlite3Database(url_, enableFTS)
+		return makeSqlite3Database(url_)
 
 	case "postgresql":
 		return nil, fmt.Errorf("postgresql is not yet supported!")
