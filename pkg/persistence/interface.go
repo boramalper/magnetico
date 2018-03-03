@@ -2,8 +2,10 @@ package persistence
 
 import (
 	"fmt"
-	"go.uber.org/zap"
 	"net/url"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 type Database interface {
@@ -21,58 +23,38 @@ type Database interface {
 	// * that match the @query if it's not empty,
 	// ordered by the @orderBy in ascending order if @isDescending is false, else in descending
 	// order.
-	QueryTorrents(query string, orderBy orderingCriteria, ord order, n uint, when presence, timePoint int64) ([]TorrentMetadata, error)
+	QueryTorrents(query string, discoveredOnBefore int64, orderBy orderingCriteria, ascending bool, page uint, pageSize uint) ([]TorrentMetadata, error)
 	// GetTorrents returns the TorrentExtMetadata for the torrent of the given InfoHash. Might return
 	// nil, nil if the torrent does not exist in the database.
 	GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 	GetFiles(infoHash []byte) ([]File, error)
-	GetStatistics(from ISO8601, period uint) (*Statistics, error)
+	GetStatistics(n uint, granularity Granularity, to time.Time) (*Statistics, error)
 }
 
 type orderingCriteria uint8
-
 const (
-	BY_RELEVANCE orderingCriteria = 1
-	BY_SIZE                       = 2
-	BY_DISCOVERED_ON              = 3
-	BY_N_FILES                    = 4
+	ByRelevance orderingCriteria = iota
+	BySize
+	ByDiscoveredOn
+	ByNFiles
 )
 
-type order uint8
-
+type Granularity uint8
 const (
-	ASCENDING  order = 1
-	DESCENDING       = 2
-)
-
-type presence uint8
-
-const (
-	BEFORE presence = 1
-	AFTER           = 2
-)
-
-type statisticsGranularity uint8
-type ISO8601 string
-
-const (
-	HOURLY_STATISTICS statisticsGranularity = 1
-	DAILY_STATISTICS                        = 2
-	WEEKLY_STATISTICS                       = 3
-	MONTHLY_STATISTICS                      = 4
-	YEARLY_STATISTICS                       = 5
+	Yearly Granularity = iota
+	Monthly
+	Weekly
+	Daily
+	Hourly
 )
 
 type databaseEngine uint8
-
 const (
-	SQLITE3_ENGINE databaseEngine = 1
+	Sqlite3 databaseEngine = 1
 )
 
 type Statistics struct {
-	Granularity statisticsGranularity
-	From        ISO8601
-	Period      uint
+	N uint
 
 	// All these slices below have the exact length equal to the Period.
 	NTorrentsDiscovered []uint
@@ -87,7 +69,7 @@ type File struct {
 type TorrentMetadata struct {
 	InfoHash     []byte
 	Name         string
-	Size         uint64
+	TotalSize    uint64
 	DiscoveredOn int64
 	NFiles       uint
 }
@@ -111,7 +93,8 @@ func MakeDatabase(rawURL string, enableFTS bool, logger *zap.Logger) (Database, 
 
 	case "mysql":
 		return nil, fmt.Errorf("mysql is not yet supported!")
-	}
 
-	return nil, fmt.Errorf("unknown URI scheme (database engine)!")
+	default:
+		return nil, fmt.Errorf("unknown URI scheme (database engine)!")
+	}
 }
