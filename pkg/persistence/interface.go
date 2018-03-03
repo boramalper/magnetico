@@ -17,14 +17,13 @@ type Database interface {
 	// GetNumberOfTorrents returns the number of torrents saved in the database. Might be an
 	// approximation.
 	GetNumberOfTorrents() (uint, error)
-	// QueryTorrents returns @n torrents
-	// * that are discovered before the @timePoint if @isAfter is false, else that are
-	//   discovered after the @timePoint,
-	// * that match the @query if it's not empty,
-	// ordered by the @orderBy in ascending order if @isDescending is false, else in descending
-	// order.
+	// QueryTorrents returns @pageSize amount of torrents,
+	// * that are discovered before @discoveredOnBefore
+	// * that match the @query if it's not empty, else all torrents
+	// * ordered by the @orderBy in ascending order if @ascending is true, else in descending order
+	// after skipping (@page * @pageSize) torrents that also fits the criteria above.
 	QueryTorrents(query string, discoveredOnBefore int64, orderBy orderingCriteria, ascending bool, page uint, pageSize uint) ([]TorrentMetadata, error)
-	// GetTorrents returns the TorrentExtMetadata for the torrent of the given InfoHash. Might return
+	// GetTorrents returns the TorrentExtMetadata for the torrent of the given InfoHash. Will return
 	// nil, nil if the torrent does not exist in the database.
 	GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 	GetFiles(infoHash []byte) ([]File, error)
