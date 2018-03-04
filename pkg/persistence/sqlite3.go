@@ -10,18 +10,13 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"
-	"math"
 )
 
 type sqlite3Database struct {
 	conn *sql.DB
 }
 
-func (db *sqlite3Database) Engine() databaseEngine {
-	return SQLITE3_ENGINE
-}
-
-func makeSqlite3Database(url_ *url.URL, enableFTS bool) (Database, error) {
+func makeSqlite3Database(url_ *url.URL) (Database, error) {
 	db := new(sqlite3Database)
 
 	dbDir, _ := path.Split(url_.Path)
@@ -49,6 +44,10 @@ func makeSqlite3Database(url_ *url.URL, enableFTS bool) (Database, error) {
 	return db, nil
 }
 
+func (db *sqlite3Database) Engine() databaseEngine {
+	return Sqlite3
+}
+
 func (db *sqlite3Database) DoesTorrentExist(infoHash []byte) (bool, error) {
 	rows, err := db.conn.Query("SELECT 1 FROM torrents WHERE info_hash = ?;", infoHash)
 	if err != nil {
@@ -70,21 +69,6 @@ func (db *sqlite3Database) DoesTorrentExist(infoHash []byte) (bool, error) {
 }
 
 func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []File) error {
-	// Although we check whether the torrent exists in the database before asking MetadataSink to
-	// fetch its metadata, the torrent can also exists in the Sink before that. Now, if a torrent in
-	// the sink is still being fetched, that's still not a problem as we just add the new peer for
-	// the torrent and exit, but if the torrent is complete (i.e. its metadata) and if its waiting
-	// in the channel to be received, a race condition arises when we query the database and seeing
-	// that it doesn't exists there, add it to the sink.
-	// Hence check for the last time whether the torrent exists in the database, and only if not,
-	// add it.
-	exists, err := db.DoesTorrentExist(infoHash)
-	if err != nil {
-		return err
-	} else if exists {
-		return nil
-	}
-
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return err
@@ -95,24 +79,31 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 	// is nice.
 	defer tx.Rollback()
 
-	var total_size int64 = 0
+	var totalSize int64 = 0
 	for _, file := range files {
-		total_size += file.Size
+		totalSize += file.Size
 	}
 
 	// This is a workaround for a bug: the database will not accept total_size to be zero.
-	if total_size == 0 {
+	if totalSize == 0 {
 		return nil
 	}
 
+	// Although we check whether the torrent exists in the database before asking MetadataSink to
+	// fetch its metadata, the torrent can also exists in the Sink before that. Now, if a torrent in
+	// the sink is still being fetched, that's still not a problem as we just add the new peer for
+	// the torrent and exit, but if the torrent is complete (i.e. its metadata) and if its waiting
+	// in the channel to be received, a race condition arises when we query the database and seeing
+	// that it doesn't exists there, add it to the sink.
+	// Hence INSERT OR IGNORE.
 	res, err := tx.Exec(`
-		INSERT INTO torrents (
+		INSERT OR IGNORE INTO torrents (
 			info_hash,
 			name,
 			total_size,
 			discovered_on
 		) VALUES (?, ?, ?, ?);
-	`, infoHash, name, total_size, time.Now().Unix())
+	`, infoHash, name, totalSize, time.Now().Unix())
 	if err != nil {
 		return err
 	}
@@ -145,7 +136,8 @@ func (db *sqlite3Database) Close() error {
 }
 
 func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
-	// COUNT(1) is much more inefficient since it scans the whole table, so use MAX(ROWID)
+	// COUNT(1) is much more inefficient since it scans the whole table, so use MAX(ROWID).
+	// Keep in mind that the value returned by GetNumberOfTorrents() might be an approximation.
 	rows, err := db.conn.Query("SELECT MAX(ROWID) FROM torrents;")
 	if err != nil {
 		return 0, err
@@ -167,18 +159,12 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 	return n, nil
 }
 
-func (db *sqlite3Database) QueryTorrents(query string, orderBy orderingCriteria, ord order, n uint, when presence, timePoint int64) ([]TorrentMetadata, error) {
-	if query == "" && orderBy == BY_RELEVANCE {
+func (db *sqlite3Database) QueryTorrents(query string, discoveredOnBefore int64, orderBy orderingCriteria, ascending bool, page uint, pageSize uint) ([]TorrentMetadata, error) {
+	if query == "" && orderBy == ByRelevance {
 		return nil, fmt.Errorf("torrents cannot be ordered by \"relevance\" when the query is empty")
 	}
 
-	if timePoint == 0 && when == BEFORE {
-		return nil, fmt.Errorf("nothing can come \"before\" time 0")
-	}
 
-	if timePoint == math.MaxInt64 && when == AFTER {
-		return nil, fmt.Errorf("nothing can come \"after\" time %d", math.MaxInt64)
-	}
 
 	// TODO
 
@@ -261,7 +247,7 @@ func (db *sqlite3Database) setupDatabase() error {
 		PRAGMA journal_mode=WAL;
 		PRAGMA temp_store=1;
 		PRAGMA foreign_keys=ON;
-		PRAGMA encoding="UTF-8";
+		PRAGMA encoding='UTF-8';
 	`)
 	if err != nil {
 		return fmt.Errorf("sql.DB.Exec (PRAGMAs): %s", err.Error())
@@ -374,6 +360,39 @@ func (db *sqlite3Database) setupDatabase() error {
 		`)
 		if err != nil {
 			return fmt.Errorf("sql.Tx.Exec (v1 -> v2): %s", err.Error())
+		}
+		fallthrough
+
+	case 2:
+		// Upgrade from user_version 2 to 3
+		// Changes:
+		//   * Created `torrents_idx` FTS5 virtual table.
+		// See:
+		//   * https://sqlite.org/fts5.html
+		//   * https://sqlite.org/fts3.html
+		zap.L().Warn("Updating database schema from 2 to 3... (this might take a while)")
+		tx.Exec(`
+			CREATE VIRTUAL TABLE torrents_idx USING fts5(name, content='torrents', content_rowid='id', tokenize="porter unicode61 separators ' !""#$%&''()*+,-./:;<=>?@[\]^_` + "`" + `{|}~'");
+            
+			-- Populate the index
+			INSERT INTO torrents_idx(rowid, name) SELECT id, name FROM torrents;
+
+			-- Triggers to keep the FTS index up to date.
+			CREATE TRIGGER torrents_ai AFTER INSERT ON torrents BEGIN
+			  INSERT INTO torrents_idx(rowid, name) VALUES (new.id, new.name);
+			END;
+			CREATE TRIGGER torrents_ad AFTER DELETE ON torrents BEGIN
+			  INSERT INTO torrents_idx(torrents_idx, rowid, name) VALUES('delete', old.id, old.name);
+			END;
+			CREATE TRIGGER torrents_au AFTER UPDATE ON torrents BEGIN
+			  INSERT INTO torrents_idx(torrents_idx, rowid, name) VALUES('delete', old.id, old.name);
+			  INSERT INTO torrents_idx(rowid, name) VALUES (new.id, new.name);
+			END;
+
+			PRAGMA user_version = 3;
+		`)
+		if err != nil {
+			return fmt.Errorf("sql.Tx.Exec (v2 -> v3): %s", err.Error())
 		}
 	}
 
