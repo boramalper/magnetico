@@ -28,6 +28,7 @@ type Database interface {
 	GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 	GetFiles(infoHash []byte) ([]File, error)
 	GetStatistics(n uint, granularity Granularity, to time.Time) (*Statistics, error)
+	GetNewestTorrents(amount int, since int64) ([]TorrentMetadata, error)
 }
 
 type orderingCriteria uint8

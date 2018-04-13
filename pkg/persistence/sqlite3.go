@@ -222,6 +222,12 @@ func (db *sqlite3Database) GetStatistics(n uint, granularity Granularity, to tim
 	return nil, nil
 }
 
+func (db *sqlite3Database) GetNewestTorrents(amount int, since int64) ([]TorrentMetadata, error) {
+	// TODO
+	return nil, nil
+}
+
+
 func (db *sqlite3Database) commitQueuedTorrents() error {
 	// TODO
 	return nil
