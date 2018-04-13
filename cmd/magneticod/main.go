@@ -96,7 +96,7 @@ func main() {
 	interruptChan := make(chan os.Signal)
 	signal.Notify(interruptChan, os.Interrupt)
 
-	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, false, logger)
+	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, logger)
 	if err != nil {
 		logger.Sugar().Fatalf("Could not open the database at `%s`: %s", opFlags.DatabaseURL, err.Error())
 	}

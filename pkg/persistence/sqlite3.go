@@ -193,7 +193,7 @@ func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 	}
 
 	var tm TorrentMetadata
-	rows.Scan(&tm.InfoHash, &tm.Name, &tm.Size, &tm.DiscoveredOn, &tm.NFiles)
+	rows.Scan(&tm.InfoHash, &tm.Name, &tm.TotalSize, &tm.DiscoveredOn, &tm.NFiles)
 	if err = rows.Close(); err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 	return files, nil
 }
 
-func (db *sqlite3Database) GetStatistics(from ISO8601, period uint) (*Statistics, error) {
+func (db *sqlite3Database) GetStatistics(n uint, granularity Granularity, to time.Time) (*Statistics, error) {
 	// TODO
 	return nil, nil
 }
