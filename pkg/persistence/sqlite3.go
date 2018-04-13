@@ -309,7 +309,7 @@ func (db *sqlite3Database) setupDatabase() error {
 		//   * `info_hash_index` is recreated as UNIQUE.
 		zap.L().Warn("Updating database schema from 0 to 1... (this might take a while)")
 		_, err = tx.Exec(`
-			DROP INDEX info_hash_index;
+			DROP INDEX IF EXISTS info_hash_index;
 			CREATE UNIQUE INDEX info_hash_index ON torrents	(info_hash);
 			PRAGMA user_version = 1;
 		`)
