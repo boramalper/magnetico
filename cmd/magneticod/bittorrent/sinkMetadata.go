@@ -9,8 +9,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"magnetico/magneticod/dht/mainline"
-	"magnetico/persistence"
+	"github.com/izolight/magnetico/cmd/magneticod/dht/mainline"
+	"github.com/izolight/magnetico/pkg/persistence"
 )
 
 type Metadata struct {

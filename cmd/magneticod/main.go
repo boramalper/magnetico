@@ -12,10 +12,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"magnetico/magneticod/bittorrent"
-	"magnetico/magneticod/dht"
+	"github.com/izolight/magnetico/cmd/magneticod/bittorrent"
+	"github.com/izolight/magnetico/cmd/magneticod/dht"
 
-	"magnetico/persistence"
+	"github.com/izolight/magnetico/pkg/persistence"
 	"runtime/pprof"
 	"github.com/Wessie/appdirs"
 	"path"
