@@ -13,6 +13,29 @@ type postgresDatabase struct {
 	conn *sql.DB
 }
 
+func makePostgresDatabase(url_ string) (Database, error) {
+	db := new(postgresDatabase)
+
+	var err error
+	db.conn, err = sql.Open("postgres", url_)
+	if err != nil {
+		return nil, fmt.Errorf("sql.Open: %s", err.Error())
+	}
+
+	// > Open may just validate its arguments without creating a connection to the database. To
+	// > verify that the data source Name is valid, call Ping.
+	// https://golang.org/pkg/database/sql/#Open
+	if err = db.conn.Ping(); err != nil {
+		return nil, fmt.Errorf("sql.DB.Ping: %s", err.Error())
+	}
+
+	if err := db.setupDatabase(); err != nil {
+		return nil, fmt.Errorf("setupDatabase: %s", err.Error())
+	}
+
+	return db, nil
+}
+
 func (db *postgresDatabase) DoesTorrentExist(infoHash []byte) (bool, error) {
 	rows, err := db.conn.Query("SELECT 1 FROM torrents WHERE info_hash = ?;", infoHash)
 	if err != nil {
@@ -182,4 +205,61 @@ func (db *postgresDatabase) GetNewestTorrents(amount int, since int64) ([]Torren
 
 func (db *postgresDatabase) Engine() databaseEngine {
 	return Postgres
+}
+
+func (db *postgresDatabase) setupDatabase() error {
+	// Ensure utf-8 encoding
+	_, err := db.conn.Exec(`
+		initdb -E UTF8;`)
+	if err != nil {
+		return fmt.Errorf("sql.DB.Exec (initdb): %s", err.Error())
+	}
+
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("sql.DB.Begin: %s", err.Error())
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS torrents (
+			id             SERIAL PRIMARY KEY,
+			info_hash      BYTEA NOT NULL UNIQUE,
+			name           VARCHAR NOT NULL,
+			total_size     BIGINT NOT NULL CHECK(total_size > 0),
+			discovered_on  TIMESTAMP NOT NULL CHECK(discovered_on > 0)
+		);
+		CREATE TABLE IF NOT EXISTS files (
+			id          SERIAL PRIMARY KEY,
+			torrent_id  INTEGER REFERENCES torrents ON DELETE CASCADE ON UPDATE RESTRICT,
+			size        BIGINT NOT NULL,
+			path        VARCHAR NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS settings (
+			name	VARCHAR UNIQUE,
+			value 	VARCHAR
+		);
+	`)
+
+	if err != nil {
+		return fmt.Errorf("sql.Tx.Exec (v0): %s", err.Error())
+	}
+
+	rows, err := tx.Query("SELECT value FROM settings WHERE name='SCHEMA_VERSION';")
+	if err != nil {
+		return fmt.Errorf("sql.Tx.Query (SCHEMA_VERSION): %s", err.Error())
+	}
+	var userVersion string
+	if rows.Next() != true {
+		return fmt.Errorf("sql.Rows.Next (SCHEMA_VERSION): SELECT value FROM settings WHERE name='SCHEMA_VERSION did not return any rows!")
+	}
+	if err = rows.Scan(&userVersion); err != nil {
+		return fmt.Errorf("sql.Rows.Scan (SCHEMA_VERSION): %s", err.Error())
+	}
+	if err = rows.Close(); err != nil {
+		return fmt.Errorf("sql.Rows.Close (SCHEMA_VERSION): %s", err.Error())
+	}
+
+	// TODO
+	return nil
 }
