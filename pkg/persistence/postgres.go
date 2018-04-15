@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	_ "github.com/lib/pq"
+	"unicode/utf8"
 )
 
 type postgresDatabase struct {
@@ -82,21 +83,25 @@ func (db *postgresDatabase) AddNewTorrent(infoHash []byte, name string, files []
 			total_size,
 			discovered_on,
 			search
-		) VALUES ($1::BYTEA, $2::VARCHAR, $3, $4::TIMESTAMP, to_tsvector(regexp_replace(coalesce($2, ''), '[^\w]+', ' ', 'gi')))
+		) VALUES ($1::BYTEA, $2::VARCHAR, $3, $4::TIMESTAMP, to_tsvector(regexp_replace(coalesce($2::VARCHAR, ''), '[^\w]+', ' ', 'gi')))
 		ON CONFLICT
 		DO NOTHING
 		RETURNING id;
-	`, infoHash, name, totalSize, time.Now()).Scan(&lastInsertId)
+	`, infoHash, fixUTF8Encoding(name), totalSize, time.Now()).Scan(&lastInsertId)
 	if err != nil {
-		return fmt.Errorf("sql.Result.LastInsertId()!  %s", err.Error())
+		return fmt.Errorf("could not insert torrent with name %s and bytes % x %s", name, name, err.Error())
 	}
 
 	for _, file := range files {
-		_, err = tx.Exec("INSERT INTO files (torrent_id, Size, path) VALUES ($1, $2, $3::VARCHAR);",
-			lastInsertId, file.Size, file.Path,
+		_, err = tx.Exec(`INSERT INTO files (
+				torrent_id, 
+				size, 
+				path
+			) VALUES ($1, $2, $3::VARCHAR);`,
+			lastInsertId, file.Size, fixUTF8Encoding(file.Path),
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf( "couldn't insert file with path %s and bytes % x %s", file.Path, file.Path, err.Error())
 		}
 	}
 
@@ -292,4 +297,21 @@ func (db *postgresDatabase) setupDatabase() error {
 	}
 
 	return nil
+}
+
+func fixUTF8Encoding(in string) string {
+	if !utf8.ValidString(in) {
+		var fixed []byte
+		for _, c := range in {
+			if c != utf8.RuneError {
+				fixed = append(fixed, byte(c))
+			}
+		}
+		if len(in) > 0 {
+			return string(fixed)
+		} else {
+			return "Invalid UTF-8"
+		}
+	}
+	return in
 }
