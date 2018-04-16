@@ -1,22 +1,22 @@
 package main
 
 import (
+	"encoding/hex"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
+	"unsafe"
 
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"encoding/hex"
-	"magnetico/persistence"
-	"strconv"
-	"time"
-	"unsafe"
+	"github.com/boramalper/magnetico/pkg/persistence"
 )
 
 const N_TORRENTS = 20

@@ -6,19 +6,19 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path"
+	"runtime/pprof"
 	"time"
 
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"magnetico/magneticod/bittorrent"
-	"magnetico/magneticod/dht"
+	"github.com/boramalper/magnetico/cmd/magneticod/bittorrent"
+	"github.com/boramalper/magnetico/cmd/magneticod/dht"
 
-	"magnetico/persistence"
-	"runtime/pprof"
 	"github.com/Wessie/appdirs"
-	"path"
+	"github.com/boramalper/magnetico/pkg/persistence"
 )
 
 type cmdFlags struct {

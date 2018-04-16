@@ -16,7 +16,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"magnetico/persistence"
+	"github.com/boramalper/magnetico/pkg/persistence"
 )
 
 const MAX_METADATA_SIZE = 10 * 1024 * 1024

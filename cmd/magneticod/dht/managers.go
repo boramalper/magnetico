@@ -1,6 +1,6 @@
 package dht
 
-import "magnetico/magneticod/dht/mainline"
+import "github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
 
 type TrawlingManager struct {
 	// private
