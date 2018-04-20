@@ -300,18 +300,17 @@ func (db *postgresDatabase) setupDatabase() error {
 }
 
 func fixUTF8Encoding(in string) string {
-	if !utf8.ValidString(in) {
+	for !utf8.ValidString(in) && len(in) > 0 {
 		var fixed []byte
 		for _, c := range in {
 			if c != utf8.RuneError {
 				fixed = append(fixed, byte(c))
 			}
 		}
-		if len(in) > 0 {
-			return string(fixed)
-		} else {
-			return "Invalid UTF-8"
-		}
+		in = string(fixed)
 	}
-	return in
+	if len(in) > 0 {
+		return in
+	}
+	return "Invalid UTF-8"
 }
