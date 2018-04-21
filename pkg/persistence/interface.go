@@ -3,7 +3,6 @@ package persistence
 import (
 	"fmt"
 	"net/url"
-	"time"
 
 	"go.uber.org/zap"
 )
@@ -22,12 +21,20 @@ type Database interface {
 	// * that match the @query if it's not empty, else all torrents
 	// * ordered by the @orderBy in ascending order if @ascending is true, else in descending order
 	// after skipping (@page * @pageSize) torrents that also fits the criteria above.
-	QueryTorrents(query string, discoveredOnBefore int64, orderBy orderingCriteria, ascending bool, page uint, pageSize uint) ([]TorrentMetadata, error)
+	QueryTorrents(
+		query string,
+		epoch int64,
+		orderBy orderingCriteria,
+		ascending bool,
+		limit uint,
+		lastOrderedValue *uint,
+		lastID *uint,
+	) ([]TorrentMetadata, error)
 	// GetTorrents returns the TorrentExtMetadata for the torrent of the given InfoHash. Will return
 	// nil, nil if the torrent does not exist in the database.
 	GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 	GetFiles(infoHash []byte) ([]File, error)
-	GetStatistics(n uint, granularity Granularity, to time.Time) (*Statistics, error)
+	GetStatistics(n uint, to string) (*Statistics, error)
 }
 
 type orderingCriteria uint8
@@ -36,15 +43,8 @@ const (
 	BySize
 	ByDiscoveredOn
 	ByNFiles
-)
-
-type Granularity uint8
-const (
-	Yearly Granularity = iota
-	Monthly
-	Weekly
-	Daily
-	Hourly
+	ByNSeeders
+	ByNLeechers
 )
 
 type databaseEngine uint8
@@ -53,11 +53,12 @@ const (
 )
 
 type Statistics struct {
-	N uint
+	N uint64
 
 	// All these slices below have the exact length equal to the Period.
-	NTorrentsDiscovered []uint
-	NFilesDiscovered    []uint
+	NTorrents []uint64
+	NFiles    []uint64
+	TotalSize []uint64
 }
 
 type File struct {
@@ -68,7 +69,7 @@ type File struct {
 type TorrentMetadata struct {
 	InfoHash     []byte
 	Name         string
-	TotalSize    uint64
+	Size         uint64
 	DiscoveredOn int64
 	NFiles       uint
 }

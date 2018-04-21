@@ -1,8 +1,10 @@
 package persistence
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"text/template"
 	"net/url"
 	"os"
 	"path"
@@ -79,9 +81,9 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 	// is nice.
 	defer tx.Rollback()
 
-	var totalSize int64 = 0
+	var totalSize uint64 = 0
 	for _, file := range files {
-		totalSize += file.Size
+		totalSize += uint64(file.Size)
 	}
 
 	// This is a workaround for a bug: the database will not accept total_size to be zero.
@@ -114,7 +116,7 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 	}
 
 	for _, file := range files {
-		_, err = tx.Exec("INSERT INTO files (torrent_id, Size, path) VALUES (?, ?, ?);",
+		_, err = tx.Exec("INSERT INTO files (torrent_id, size, path) VALUES (?, ?, ?);",
 			lastInsertId, file.Size, file.Path,
 		)
 		if err != nil {
@@ -130,7 +132,6 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 	return nil
 }
 
-
 func (db *sqlite3Database) Close() error {
 	return db.conn.Close()
 }
@@ -144,7 +145,7 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 	}
 
 	if rows.Next() != true {
-		fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`!")
+		fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`")
 	}
 
 	var n uint
@@ -159,26 +160,137 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 	return n, nil
 }
 
-func (db *sqlite3Database) QueryTorrents(query string, discoveredOnBefore int64, orderBy orderingCriteria, ascending bool, page uint, pageSize uint) ([]TorrentMetadata, error) {
+func (db *sqlite3Database) QueryTorrents(
+	query string,
+	epoch int64,
+	orderBy orderingCriteria,
+	ascending bool,
+	limit uint,
+	lastOrderedValue *uint,
+	lastID *uint,
+) ([]TorrentMetadata, error) {
 	if query == "" && orderBy == ByRelevance {
-		return nil, fmt.Errorf("torrents cannot be ordered by \"relevance\" when the query is empty")
+		return nil, fmt.Errorf("torrents cannot be ordered by relevance when the query is empty")
+	}
+	if (lastOrderedValue == nil) != (lastID == nil) {
+		return nil, fmt.Errorf("lastOrderedValue and lastID should be supplied together, if supplied")
+	}
+
+	doJoin := query != ""
+	firstPage := lastID != nil
+
+	// executeTemplate is used to prepare the SQL query, WITH PLACEHOLDERS FOR USER INPUT.
+	sqlQuery := executeTemplate(`
+		SELECT info_hash
+			 , name
+			 , total_size
+			 , discovered_on
+			 , (SELECT COUNT(*) FROM files WHERE torrents.id = files.torrent_id) AS n_files
+		FROM torrents
+	{{ if .DoJoin }}
+		INNER JOIN (
+			SELECT rowid AS id
+				 , bm25(torrents_idx) AS rank
+			FROM torrents_idx
+			WHERE torrents_idx MATCH ?
+		) AS idx USING(id)
+	{{ end }}
+		WHERE     modified_on <= ?
+	{{ if not FirstPage }}
+			  AND id > ?
+			  AND {{ .OrderOn }} {{ GTEorLTE(.Ascending) }} ?
+	{{ end }}
+		ORDER BY {{ .OrderOn }} {{ AscOrDesc(.Ascending) }}, id ASC
+		LIMIT ?;	
+	`, struct {
+		DoJoin bool
+		FirstPage bool
+		OrderOn string
+		Ascending bool
+	}{
+		DoJoin: doJoin,  // if there is a query, do join
+		FirstPage: firstPage,  // lastID != nil implies that lastOrderedValue != nil as well
+		OrderOn: orderOn(orderBy),
+		Ascending: ascending,
+	}, template.FuncMap{
+		"GTEorLTE": func(ascending bool) string {
+			// TODO: or maybe vice versa idk
+			if ascending {
+				return "<"
+			} else {
+				return ">"
+			}
+		},
+		"AscOrDesc": func(ascending bool) string {
+			if ascending {
+				return "ASC"
+			} else {
+				return "DESC"
+			}
+		},
+	})
+
+	// Prepare query
+	queryArgs := make([]interface{}, 0)
+	if doJoin {
+		queryArgs = append(queryArgs, query)
+	}
+	queryArgs = append(queryArgs, epoch)
+	if firstPage {
+		queryArgs = append(queryArgs, lastID)
+		queryArgs = append(queryArgs, lastOrderedValue)
+	}
+	queryArgs = append(queryArgs, limit)
+
+	rows, err := db.conn.Query(sqlQuery, queryArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("error while querying torrents: %s", err.Error())
 	}
 
 
+	var torrents []TorrentMetadata
+	for rows.Next() {
+		var torrent TorrentMetadata
+		if err = rows.Scan(&torrent.InfoHash, &torrent.Name, &torrent.Size, &torrent.DiscoveredOn, &torrent.NFiles); err != nil {
+			return nil, err
+		}
+		torrents = append(torrents, torrent)
+	}
 
-	// TODO
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 
-	return nil, nil
+	return torrents, nil
+}
+
+func orderOn(orderBy orderingCriteria) string {
+	switch orderBy {
+	case ByRelevance:
+		return "idx.rank"
+
+	case BySize:
+		return "total_size"
+
+	case ByDiscoveredOn:
+		return "discovered_on"
+
+	case ByNFiles:
+		return "n_files"
+
+	default:
+		panic(fmt.Sprintf("unknown orderBy: %v", orderBy))
+	}
 }
 
 func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error) {
-	rows, err := db.conn.Query(
-		`SELECT
+	rows, err := db.conn.Query(`
+		SELECT
 			info_hash,
 			name,
 			total_size,
 			discovered_on,
-			(SELECT COUNT(1) FROM files WHERE torrent_id = torrents.id) AS n_files
+			(SELECT COUNT(*) FROM files WHERE torrent_id = torrents.id) AS n_files
 		FROM torrents
 		WHERE info_hash = ?`,
 		infoHash,
@@ -188,12 +300,14 @@ func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 	}
 
 	if rows.Next() != true {
-		zap.L().Warn("torrent not found amk")
 		return nil, nil
 	}
 
 	var tm TorrentMetadata
-	rows.Scan(&tm.InfoHash, &tm.Name, &tm.Size, &tm.DiscoveredOn, &tm.NFiles)
+	if err = rows.Scan(&tm.InfoHash, &tm.Name, &tm.Size, &tm.DiscoveredOn, &tm.NFiles); err != nil {
+		return nil, err
+	}
+
 	if err = rows.Close(); err != nil {
 		return nil, err
 	}
@@ -210,21 +324,28 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 	var files []File
 	for rows.Next() {
 		var file File
-		rows.Scan(&file.Size, &file.Path)
+		if err = rows.Scan(&file.Size, &file.Path); err != nil {
+			return nil, err
+		}
 		files = append(files, file)
+	}
+
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 
 	return files, nil
 }
 
-func (db *sqlite3Database) GetStatistics(from ISO8601, period uint) (*Statistics, error) {
-	// TODO
-	return nil, nil
-}
+func (db *sqlite3Database) GetStatistics(n uint, to string) (*Statistics, error) {
+	to_time, granularity, err := ParseISO8601(to)
+	if err != nil {
+		return nil, fmt.Errorf("parsing @to error: %s", err.Error())
+	}
 
-func (db *sqlite3Database) commitQueuedTorrents() error {
 	// TODO
-	return nil
+
+	return nil, nil
 }
 
 func (db *sqlite3Database) setupDatabase() error {
@@ -263,8 +384,10 @@ func (db *sqlite3Database) setupDatabase() error {
 	// is nice.
 	defer tx.Rollback()
 
-	// Essential, and valid for all user_version`s:
-	// TODO: "torrent_id" column of the "files" table can be NULL, how can we fix this in a new schema?
+	// Initial Setup for `user_version` 0:
+	// FROZEN.
+	// TODO: "torrent_id" column of the "files" table can be NULL, how can we fix this in a new
+	//       version schema?
 	_, err = tx.Exec(`
 		CREATE TABLE IF NOT EXISTS torrents (
 			id             INTEGER PRIMARY KEY,
@@ -303,13 +426,13 @@ func (db *sqlite3Database) setupDatabase() error {
 	}
 
 	switch userVersion {
-	case 0:
+	case 0:  // FROZEN.
 		// Upgrade from user_version 0 to 1
 		// Changes:
 		//   * `info_hash_index` is recreated as UNIQUE.
 		zap.L().Warn("Updating database schema from 0 to 1... (this might take a while)")
 		_, err = tx.Exec(`
-			DROP INDEX info_hash_index;
+			DROP INDEX IF EXISTS info_hash_index;
 			CREATE UNIQUE INDEX info_hash_index ON torrents	(info_hash);
 			PRAGMA user_version = 1;
 		`)
@@ -318,7 +441,7 @@ func (db *sqlite3Database) setupDatabase() error {
 		}
 		fallthrough
 
-	case 1:
+	case 1:  // FROZEN.
 		// Upgrade from user_version 1 to 2
 		// Changes:
 		//   * Added `n_seeders`, `n_leechers`, and `updated_on` columns to the `torrents` table, and
@@ -363,13 +486,16 @@ func (db *sqlite3Database) setupDatabase() error {
 		}
 		fallthrough
 
-	case 2:
+	case 2:  // NOT FROZEN! (subject to change or complete removal)
 		// Upgrade from user_version 2 to 3
 		// Changes:
 		//   * Created `torrents_idx` FTS5 virtual table.
-		// See:
-		//   * https://sqlite.org/fts5.html
-		//   * https://sqlite.org/fts3.html
+		//
+		//     See:
+		//     * https://sqlite.org/fts5.html
+		//     * https://sqlite.org/fts3.html
+		//
+		//   * Added `n_files` column to the `torrents` table.
 		zap.L().Warn("Updating database schema from 2 to 3... (this might take a while)")
 		tx.Exec(`
 			CREATE VIRTUAL TABLE torrents_idx USING fts5(name, content='torrents', content_rowid='id', tokenize="porter unicode61 separators ' !""#$%&''()*+,-./:;<=>?@[\]^_` + "`" + `{|}~'");
@@ -389,6 +515,11 @@ func (db *sqlite3Database) setupDatabase() error {
 			  INSERT INTO torrents_idx(rowid, name) VALUES (new.id, new.name);
 			END;
 
+            -- Add column modified_on
+			ALTER TABLE torrents ADD COLUMN modified_on INTEGER;
+			CREATE INDEX modified_on_index ON torrents (modified_on);
+			UPDATE torrents SET torrents.modified_on = (SELECT discovered_on);
+
 			PRAGMA user_version = 3;
 		`)
 		if err != nil {
@@ -401,4 +532,15 @@ func (db *sqlite3Database) setupDatabase() error {
 	}
 
 	return nil
+}
+
+func executeTemplate(text string, data interface{}, funcs template.FuncMap) string {
+	t := template.Must(template.New("anon").Funcs(funcs).Parse(text))
+
+	var buf bytes.Buffer
+	err := t.Execute(&buf, data)
+	if err != nil {
+		panic(err.Error())
+	}
+	return buf.String()
 }
