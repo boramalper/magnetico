@@ -5,11 +5,11 @@ import (
 
 	"github.com/anacrolix/torrent/bencode"
 	"go.uber.org/zap"
-	"strings"
+	"golang.org/x/sys/unix"
 )
 
 type Transport struct {
-	conn    *net.UDPConn
+	fd      int
 	laddr   *net.UDPAddr
 	started bool
 
@@ -46,16 +46,18 @@ func (t *Transport) Start() {
 	t.started = true
 
 	var err error
-	t.conn, err = net.ListenUDP("udp", t.laddr)
+	t.fd, err = unix.Socket(unix.SOCK_DGRAM, unix.AF_INET, 0)
 	if err != nil {
 		zap.L().Fatal("Could NOT create a UDP socket!", zap.Error(err))
 	}
+
+	unix.Bind(t.fd, unix.SockaddrInet4{Addr: t.laddr.IP, Port: t.laddr.Port})
 
 	go t.readMessages()
 }
 
 func (t *Transport) Terminate() {
-	t.conn.Close()
+	unix.Close(t.fd);
 }
 
 // readMessages is a goroutine!
@@ -63,14 +65,10 @@ func (t *Transport) readMessages() {
 	buffer := make([]byte, 65536)
 
 	for {
-		n, addr, err := t.conn.ReadFrom(buffer)
+		n, from, err := unix.Recvfrom(t.fd, buffer, 0)
 		if err != nil {
 			// TODO: isn't there a more reliable way to detect if UDPConn is closed?
-			if strings.HasSuffix(err.Error(), "use of closed network connection") {
-				break
-			} else {
-				zap.L().Debug("Could NOT read an UDP packet!", zap.Error(err))
-			}
+			zap.L().Debug("Could NOT read an UDP packet!", zap.Error(err))
 		}
 
 		var msg Message
@@ -79,7 +77,7 @@ func (t *Transport) readMessages() {
 			zap.L().Debug("Could NOT unmarshal packet data!", zap.Error(err))
 		}
 
-		t.onMessage(&msg, addr)
+		t.onMessage(&msg, from)
 	}
 }
 
@@ -89,9 +87,9 @@ func (t *Transport) WriteMessages(msg *Message, addr net.Addr) {
 		zap.L().Panic("Could NOT marshal an outgoing message! (Programmer error.)")
 	}
 
-	_, err = t.conn.WriteTo(data, addr)
+	err = unix.Sendto(t.fd, data, 0, addr)
 	// TODO: isn't there a more reliable way to detect if UDPConn is closed?
-	if err != nil && !strings.HasSuffix(err.Error(), "use of closed network connection") {
+	if err != nil {
 		zap.L().Debug("Could NOT write an UDP packet!", zap.Error(err))
 	}
 }

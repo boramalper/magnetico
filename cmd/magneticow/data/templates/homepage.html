@@ -12,12 +12,12 @@
 <main>
     <div><b>magnetico<sup>w</sup></b>&#8203;<sub>(pre-alpha)</sub></div>
     <form action="/torrents" method="get" autocomplete="off" role="search">
-        <input type="search" name="search" placeholder="Search the BitTorrent DHT" autofocus>
+        <input type="search" name="query" placeholder="Search the BitTorrent DHT" autofocus>
     </form>
 </main>
 
 <footer>
-    ~{{ "{:,}".format(n_torrents) }} torrents available (see the <a href="/statistics">statistics</a>).
+    ~{{ comma .NTorrents }} torrents available (see the <a href="/statistics">statistics</a>).
 </footer>
 </body>
 </html>

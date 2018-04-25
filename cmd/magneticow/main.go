@@ -2,16 +2,20 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
-	"unsafe"
+
+	//"strconv"
+	"strings"
+	// "time"
 
 	"github.com/dustin/go-humanize"
+	// "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -26,17 +30,20 @@ var database persistence.Database
 
 // ========= TD: TemplateData =========
 type HomepageTD struct {
-	Count uint
+	NTorrents uint
 }
 
 type TorrentsTD struct {
-	Search          string
-	SubscriptionURL string
-	Torrents        []persistence.TorrentMetadata
-	Before          int64
-	After           int64
-	SortedBy        string
-	NextPageExists  bool
+	CanLoadMore      bool
+	Query            string
+	SubscriptionURL  string
+	Torrents         []persistence.TorrentMetadata
+	SortedBy         string
+	NextPageExists   bool
+	Epoch            int64
+	LastOrderedValue uint64
+	LastID           uint64
+
 }
 
 type TorrentTD struct {
@@ -100,17 +107,21 @@ func main() {
 		"humanizeSize": func(s uint64) string {
 			return humanize.IBytes(s)
 		},
+
+		"comma": func(s uint) string {
+			return humanize.Comma(int64(s))
+		},
 	}
 
 	templates = make(map[string]*template.Template)
-	templates["feed"] = template.Must(template.New("feed").Parse(string(mustAsset("templates/feed.xml"))))
-	templates["homepage"] = template.Must(template.New("homepage").Parse(string(mustAsset("templates/homepage.html"))))
-	templates["statistics"] = template.Must(template.New("statistics").Parse(string(mustAsset("templates/statistics.html"))))
-	templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
+	// templates["feed"] = template.Must(template.New("feed").Parse(string(mustAsset("templates/feed.xml"))))
+	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
+	// templates["statistics"] = template.Must(template.New("statistics").Parse(string(mustAsset("templates/statistics.html"))))
+	// templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
 	templates["torrents"] = template.Must(template.New("torrents").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrents.html"))))
 
 	var err error
-	database, err = persistence.MakeDatabase("sqlite3:///home/bora/.local/share/magneticod/database.sqlite3", unsafe.Pointer(logger))
+	database, err = persistence.MakeDatabase("sqlite3:///home/bora/.local/share/magneticod/database.sqlite3", logger)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -121,135 +132,85 @@ func main() {
 
 // DONE
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	count, err := database.GetNumberOfTorrents()
+	nTorrents, err := database.GetNumberOfTorrents()
 	if err != nil {
 		panic(err.Error())
 	}
 	templates["homepage"].Execute(w, HomepageTD{
-		Count: count,
+		NTorrents: nTorrents,
 	})
+}
+
+func respondError(w http.ResponseWriter, statusCode int, format string, a ...interface{}) {
+	w.WriteHeader(statusCode)
+	w.Write([]byte(fmt.Sprintf(format, a...)))
 }
 
 func torrentsHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: Parsing URL Query is tedious and looks stupid... can we do better?
 	queryValues := r.URL.Query()
 
-	// Parses `before` and `after` parameters in the URL query following the conditions below:
-	// * `before` and `after` cannot be both supplied at the same time.
-	// * `before` -if supplied- cannot be less than or equal to zero.
-	// * `after` -if supplied- cannot be greater than the current Unix time.
-	// * if `before` is not supplied, it is set to the current Unix time.
-	qBefore, qAfter := (int64)(-1), (int64)(-1)
-	var err error
-	if queryValues.Get("before") != "" {
-		qBefore, err = strconv.ParseInt(queryValues.Get("before"), 10, 64)
-		if err != nil {
-			panic(err.Error())
-		}
-		if qBefore <= 0 {
-			panic("before parameter is less than or equal to zero!")
-		}
-	} else if queryValues.Get("after") != "" {
-		if qBefore != -1 {
-			panic("both before and after supplied")
-		}
-		qAfter, err = strconv.ParseInt(queryValues.Get("after"), 10, 64)
-		if err != nil {
-			panic(err.Error())
-		}
-		if qAfter > time.Now().Unix() {
-			panic("after parameter is greater than the current Unix time!")
-		}
-	} else {
-		qBefore = time.Now().Unix()
+	var query string
+	epoch := time.Now().Unix()  // epoch, if not supplied, is NOW.
+	var lastOrderedValue, lastID *uint64
+
+	if query = queryValues.Get("query"); query == "" {
+		respondError(w, 400, "query is missing")
+		return
 	}
 
-	var torrents []persistence.TorrentMetadata
-	if qBefore != -1 {
-		torrents, err = database.GetNewestTorrents(N_TORRENTS, qBefore)
-	} else {
-		torrents, err = database.QueryTorrents(
-			queryValues.Get("search"),
-			persistence.BY_DISCOVERED_ON,
-			true,
-			false,
-			N_TORRENTS,
-			qAfter,
-			true,
-		)
+	if queryValues.Get("epoch") != "" && queryValues.Get("lastOrderedValue") != "" && queryValues.Get("lastID") != "" {
+		var err error
+
+		epoch, err = strconv.ParseInt(queryValues.Get("epoch"), 10, 64)
+		if err != nil {
+			respondError(w, 400, "error while parsing epoch: %s", err.Error())
+			return
+		}
+		if epoch <= 0 {
+			respondError(w, 400, "epoch has to be greater than zero")
+			return
+		}
+
+		*lastOrderedValue, err = strconv.ParseUint(queryValues.Get("lastOrderedValue"), 10, 64)
+		if err != nil {
+			respondError(w, 400, "error while parsing lastOrderedValue: %s", err.Error())
+			return
+		}
+		if *lastOrderedValue <= 0 {
+			respondError(w, 400, "lastOrderedValue has to be greater than zero")
+			return
+		}
+
+		*lastID, err = strconv.ParseUint(queryValues.Get("lastID"), 10, 64)
+		if err != nil {
+			respondError(w, 400, "error while parsing lastID: %s", err.Error())
+			return
+		}
+		if *lastID <= 0 {
+			respondError(w, 400, "lastID has to be greater than zero")
+			return
+		}
+	} else if !(queryValues.Get("epoch") == "" && queryValues.Get("lastOrderedValue") == "" && queryValues.Get("lastID") == "") {
+		respondError(w, 400, "`epoch`, `lastOrderedValue`, `lastID` must be supplied altogether, if supplied.")
+		return
 	}
+
+	torrents, err := database.QueryTorrents(query, epoch, persistence.ByRelevance, true, 20, nil, nil)
 	if err != nil {
-		panic(err.Error())
+		respondError(w, 400, "query error: %s", err.Error())
+		return
 	}
 
-	// TODO: for testing, REMOVE
-	torrents[2].HasReadme = true
-
-	templates["torrents"].Execute(w, TorrentsTD{
-		Search:          "",
-		SubscriptionURL: "borabora",
-		Torrents:        torrents,
-		Before:          torrents[len(torrents)-1].DiscoveredOn,
-		After:           torrents[0].DiscoveredOn,
-		SortedBy:        "anan",
-		NextPageExists:  true,
-	})
-
-}
-
-func newestTorrentsHandler(w http.ResponseWriter, r *http.Request) {
-	queryValues := r.URL.Query()
-
-	qBefore, qAfter := (int64)(-1), (int64)(-1)
-	var err error
-	if queryValues.Get("before") != "" {
-		qBefore, err = strconv.ParseInt(queryValues.Get("before"), 10, 64)
-		if err != nil {
-			panic(err.Error())
-		}
-	} else if queryValues.Get("after") != "" {
-		if qBefore != -1 {
-			panic("both before and after supplied")
-		}
-		qAfter, err = strconv.ParseInt(queryValues.Get("after"), 10, 64)
-		if err != nil {
-			panic(err.Error())
-		}
-	} else {
-		qBefore = time.Now().Unix()
-	}
-
-	var torrents []persistence.TorrentMetadata
-	if qBefore != -1 {
-		torrents, err = database.QueryTorrents(
-			"",
-			persistence.BY_DISCOVERED_ON,
-			true,
-			false,
-			N_TORRENTS,
-			qBefore,
-			false,
-		)
-	} else {
-		torrents, err = database.QueryTorrents(
-			"",
-			persistence.BY_DISCOVERED_ON,
-			false,
-			false,
-			N_TORRENTS,
-			qAfter,
-			true,
-		)
-	}
-	if err != nil {
-		panic(err.Error())
+	if torrents == nil {
+		panic("torrents is nil!!!")
 	}
 
 	templates["torrents"].Execute(w, TorrentsTD{
-		Search:          "",
+		CanLoadMore:     true,
+		Query:           query,
 		SubscriptionURL: "borabora",
 		Torrents:        torrents,
-		Before:          torrents[len(torrents)-1].DiscoveredOn,
-		After:           torrents[0].DiscoveredOn,
 		SortedBy:        "anan",
 		NextPageExists:  true,
 	})

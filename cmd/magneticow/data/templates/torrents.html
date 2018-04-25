@@ -2,20 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{% if search %}"{{search}}"{% else %}Most recent torrents{% endif %} - magneticow</title>
+    <title>{{ if .Query }}"{{ .Query }}"{{ else }}Most recent torrents{{ end }} - magneticow</title>
     <link rel="stylesheet" href="static/styles/reset.css">
     <link rel="stylesheet" href="static/styles/essential.css">
     <link rel="stylesheet" href="static/styles/torrents.css">
-    <!-- <script src="script.js"></script> -->
+    <script>
+        var canLoadMore      = {{ if .CanLoadMore }} true {{ else }} false {{ end }};
+        var lastOrderedValue = {{ .LastOrderedValue }};
+        var lastID           = {{ .LastID }};
+    </script>
+    <script src="static/scripts/torrents.js"></script>
 </head>
 <body>
 <header>
     <div><a href="/"><b>magnetico<sup>w</sup></b></a>&#8203;<sub>(pre-alpha)</sub></div>
     <form action="/torrents" method="get" autocomplete="off" role="search">
-        <input type="search" name="search" placeholder="Search the BitTorrent DHT" value="{{ search }}">
+        <input type="search" name="query" placeholder="Search the BitTorrent DHT" value="{{ .Query }}">
     </form>
     <div>
-        <a href="{{ subscription_url }}"><img src="static/assets/feed.png"
+        <a href="{{ .SubscriptionURL }}"><img src="static/assets/feed.png"
                                               alt="feed icon" title="subscribe" /> subscribe</a>
     </div>
 </header>
@@ -24,67 +29,29 @@
         <thead>
             <tr>
                 <th><!-- Magnet link --></th>
-                <th>
-                {% if sorted_by == "name ASC" %}
-                    <a href="/torrents/?search={{ search }}&sort_by=name+DESC">Name ▲</a>
-                {% elif sorted_by == "name DESC" %}
-                    <a href="/torrents/?search={{ search }}&sort_by=name+ASC">Name ▼</a>
-                {% else %}
-                    <a href="/torrents/?search={{ search }}&sort_by=name+ASC">Name</a>
-                {% endif %}
-                </th>
-                <th>
-                {% if sorted_by == "total_size ASC" %}
-                    <a href="/torrents/?search={{ search }}&sort_by=total_size+DESC">Size ▲</a>
-                {% elif sorted_by == "total_size DESC" %}
-                    <a href="/torrents/?search={{ search }}&sort_by=total_size+ASC">Size ▼</a>
-                {% else %}
-                    <a href="/torrents/?search={{ search }}&sort_by=total_size+ASC">Size</a>
-                {% endif %}
-                </th>
-                <th>
-                {% if sorted_by == "discovered_on ASC" %}
-                    <a href="/torrents/?search={{ search }}&sort_by=discovered_on+DESC">Discovered on ▲</a>
-                {% elif sorted_by == "discovered_on DESC" %}
-                    <a href="/torrents/?search={{ search }}&sort_by=discovered_on+ASC">Discovered on ▼</a>
-                {% else %}
-                    <a href="/torrents/?search={{ search }}&sort_by=discovered_on+DESC">Discovered on</a>
-                {% endif %}
-                </th>
+                <th>Name</th>
+                <th>Size</th>
+                <th>Discovered on</th>
             </tr>
         </thead>
         <tbody>
-        {% for torrent in torrents %}
+        {{ range .Torrents }}
             <tr>
-                <td><a href="magnet:?xt=urn:btih:{{ torrent.info_hash }}&dn={{ torrent.name }}">
-                    <img src="static/assets/magnet.gif') }}" alt="Magnet link"
+                <td><a href="magnet:?xt=urn:btih:{{ bytesToHex .InfoHash }}&dn={{ .Name }}">
+                    <img src="static/assets/magnet.gif" alt="Magnet link"
                          title="Download this torrent using magnet" /></a></td>
-                <td><a href="/torrents/{{ torrent.info_hash }}/{{ torrent.name }}">{{ torrent.name }}</a></td>
-                <td>{{ torrent.size }}</td>
-                <td>{{ torrent.discovered_on }}</td>
+                <td><a href="/torrents/{{ bytesToHex .InfoHash }}/{{ .Name }}">{{ .Name }}</a></td>
+                <td>{{ humanizeSize .Size }}</td>
+                <td>{{ unixTimeToYearMonthDay .DiscoveredOn }}</td>
             </tr>
-        {% endfor %}
+        {{ end }}
         </tbody>
     </table>
 </main>
 <footer>
-
-    <form action="/torrents" method="get">
-        <button {% if page == 0 %}disabled{% endif %}>Previous</button>
-        <input type="text" name="search" value="{{ search }}" hidden>
-    {% if sorted_by %}
-        <input type="text" name="sort_by" value="{{ sorted_by }}" hidden>
-    {% endif %}
-        <input type="number" name="page" value="{{ page - 1 }}" hidden>
-    </form>
-    <form action="/torrents" method="get">
-        <button {% if not next_page_exists %}disabled{% endif %}>Next</button>
-        <input type="text" name="search" value="{{ search }}" hidden>
-    {% if sorted_by %}
-        <input type="text" name="sort_by" value="{{ sorted_by }}" hidden>
-    {% endif %}
-        <input type="number" name="page" value="{{ page + 1 }}" hidden>
-    </form>
+    <button onclick="loadMore();" {{ if not .CanLoadMore }} disabled {{ end }}>
+        Load More Results
+    </button>
 </footer>
 </body>
 </html>

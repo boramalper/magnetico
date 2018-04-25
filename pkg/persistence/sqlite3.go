@@ -166,8 +166,8 @@ func (db *sqlite3Database) QueryTorrents(
 	orderBy orderingCriteria,
 	ascending bool,
 	limit uint,
-	lastOrderedValue *uint,
-	lastID *uint,
+	lastOrderedValue *uint64,
+	lastID *uint64,
 ) ([]TorrentMetadata, error) {
 	if query == "" && orderBy == ByRelevance {
 		return nil, fmt.Errorf("torrents cannot be ordered by relevance when the query is empty")
@@ -176,8 +176,8 @@ func (db *sqlite3Database) QueryTorrents(
 		return nil, fmt.Errorf("lastOrderedValue and lastID should be supplied together, if supplied")
 	}
 
-	doJoin := query != ""
-	firstPage := lastID != nil
+	doJoin    := query != ""
+	firstPage := true // lastID != nil
 
 	// executeTemplate is used to prepare the SQL query, WITH PLACEHOLDERS FOR USER INPUT.
 	sqlQuery := executeTemplate(`
@@ -196,11 +196,11 @@ func (db *sqlite3Database) QueryTorrents(
 		) AS idx USING(id)
 	{{ end }}
 		WHERE     modified_on <= ?
-	{{ if not FirstPage }}
+	{{ if not .FirstPage }}
 			  AND id > ?
-			  AND {{ .OrderOn }} {{ GTEorLTE(.Ascending) }} ?
+			  AND {{ .OrderOn }} {{ GTEorLTE .Ascending }} ?
 	{{ end }}
-		ORDER BY {{ .OrderOn }} {{ AscOrDesc(.Ascending) }}, id ASC
+		ORDER BY {{ .OrderOn }} {{ AscOrDesc .Ascending }}, id ASC
 		LIMIT ?;	
 	`, struct {
 		DoJoin bool
@@ -208,17 +208,17 @@ func (db *sqlite3Database) QueryTorrents(
 		OrderOn string
 		Ascending bool
 	}{
-		DoJoin: doJoin,  // if there is a query, do join
-		FirstPage: firstPage,  // lastID != nil implies that lastOrderedValue != nil as well
+		DoJoin: doJoin,
+		FirstPage: firstPage,
 		OrderOn: orderOn(orderBy),
 		Ascending: ascending,
 	}, template.FuncMap{
 		"GTEorLTE": func(ascending bool) string {
 			// TODO: or maybe vice versa idk
 			if ascending {
-				return "<"
-			} else {
 				return ">"
+			} else {
+				return "<"
 			}
 		},
 		"AscOrDesc": func(ascending bool) string {
@@ -236,7 +236,7 @@ func (db *sqlite3Database) QueryTorrents(
 		queryArgs = append(queryArgs, query)
 	}
 	queryArgs = append(queryArgs, epoch)
-	if firstPage {
+	if !firstPage {
 		queryArgs = append(queryArgs, lastID)
 		queryArgs = append(queryArgs, lastOrderedValue)
 	}
@@ -247,8 +247,7 @@ func (db *sqlite3Database) QueryTorrents(
 		return nil, fmt.Errorf("error while querying torrents: %s", err.Error())
 	}
 
-
-	var torrents []TorrentMetadata
+	torrents := make([]TorrentMetadata, 0)
 	for rows.Next() {
 		var torrent TorrentMetadata
 		if err = rows.Scan(&torrent.InfoHash, &torrent.Name, &torrent.Size, &torrent.DiscoveredOn, &torrent.NFiles); err != nil {
@@ -338,12 +337,14 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 }
 
 func (db *sqlite3Database) GetStatistics(n uint, to string) (*Statistics, error) {
+	/*
 	to_time, granularity, err := ParseISO8601(to)
 	if err != nil {
 		return nil, fmt.Errorf("parsing @to error: %s", err.Error())
 	}
 
 	// TODO
+	*/
 
 	return nil, nil
 }
@@ -497,9 +498,9 @@ func (db *sqlite3Database) setupDatabase() error {
 		//
 		//   * Added `n_files` column to the `torrents` table.
 		zap.L().Warn("Updating database schema from 2 to 3... (this might take a while)")
-		tx.Exec(`
-			CREATE VIRTUAL TABLE torrents_idx USING fts5(name, content='torrents', content_rowid='id', tokenize="porter unicode61 separators ' !""#$%&''()*+,-./:;<=>?@[\]^_` + "`" + `{|}~'");
-            
+		_, err = tx.Exec(`
+			CREATE VIRTUAL TABLE IF NOT EXISTS torrents_idx USING fts5(name, content='torrents', content_rowid='id', tokenize="porter unicode61 separators ' !""#$%&''()*+,-./:;<=>?@[\]^_` + "`" + `{|}~'");
+			
 			-- Populate the index
 			INSERT INTO torrents_idx(rowid, name) SELECT id, name FROM torrents;
 
@@ -517,8 +518,8 @@ func (db *sqlite3Database) setupDatabase() error {
 
             -- Add column modified_on
 			ALTER TABLE torrents ADD COLUMN modified_on INTEGER;
+			UPDATE torrents SET modified_on = (SELECT discovered_on);
 			CREATE INDEX modified_on_index ON torrents (modified_on);
-			UPDATE torrents SET torrents.modified_on = (SELECT discovered_on);
 
 			PRAGMA user_version = 3;
 		`)
