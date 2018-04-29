@@ -361,6 +361,14 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	}
 
 	var files []persistence.File
+	// If there is only one file, there won't be a Files slice. That's why we need to add it here
+	if len(info.Files) == 0 {
+		files = append(files, persistence.File{
+			Size: info.Length,
+			Path: info.Name,
+		})
+	}
+
 	for _, file := range info.Files {
 		if file.Length < 0 {
 			zap.L().Debug(
