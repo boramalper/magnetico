@@ -19,26 +19,23 @@ import (
 
 	"github.com/Wessie/appdirs"
 	"github.com/boramalper/magnetico/pkg/persistence"
+	"net/url"
 )
 
 type cmdFlags struct {
-	DatabaseURL string `long:"database" description:"URL of the database."`
-
-	TrawlerMlAddrs    []string `long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
-	TrawlerMlInterval uint     `long:"trawler-ml-interval" description:"Trawling interval in integer deciseconds (one tenth of a second)."`
-
-	Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
-	Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
+	DatabaseURL string   `short:"d" long:"database" description:"URL of the database." env:"DATABASE"`
+	BindAddr    []string `short:"b" long:"bind" description:"Address(es) that the Crawler should listen on." env:"BIND_ADDR" env-delim:"," default:"0.0.0.0:0"`
+	Interval    uint     `short:"i" long:"interval" description:"Trawling Interval in milliseconds" env:"INTERVAL" default:"100"`
+	Verbose     []bool   `short:"v" long:"verbose" description:"Increase verbosity"`
+	Profile     string   `short:"p" long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
 }
 
 type opFlags struct {
-	DatabaseURL string
-
-	TrawlerMlAddrs    []string
-	TrawlerMlInterval time.Duration
-
-	Verbosity int
-	Profile string
+	DatabaseURL *url.URL
+	BindAddr    []*net.UDPAddr
+	Interval    time.Duration
+	Verbosity   int
+	Profile     string
 }
 
 func main() {
@@ -53,11 +50,7 @@ func main() {
 	zap.ReplaceGlobals(logger)
 
 	// opFlags is the "operational flags"
-	opFlags, err := parseFlags()
-	if err != nil {
-		// Do not print any error messages as jessevdk/go-flags already did.
-		return
-	}
+	opFlags := parseFlags()
 
 	zap.L().Info("magneticod v0.7.0 has been started.")
 	zap.L().Info("Copyright (C) 2017  Mert Bora ALPER <bora@boramalper.org>.")
@@ -77,31 +70,31 @@ func main() {
 
 	switch opFlags.Profile {
 	case "cpu":
-		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE | os.O_WRONLY, 0755)
+		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE|os.O_WRONLY, 0755)
 		if err != nil {
-			zap.L().Panic("Could not open the cpu profile file!", zap.Error(err))
+			zap.L().Fatal("Could not open the cpu profile file!", zap.Error(err))
 		}
 		pprof.StartCPUProfile(file)
 		defer file.Close()
 		defer pprof.StopCPUProfile()
 
 	case "memory":
-		zap.L().Panic("NOT IMPLEMENTED")
+		zap.L().Fatal("Memory profiling NOT IMPLEMENTED")
 
 	case "trace":
-		zap.L().Panic("NOT IMPLEMENTED")
+		zap.L().Fatal("trace NOT IMPLEMENTED")
 	}
 
 	// Handle Ctrl-C gracefully.
 	interruptChan := make(chan os.Signal)
 	signal.Notify(interruptChan, os.Interrupt)
 
-	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, false, logger)
+	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, logger)
 	if err != nil {
 		logger.Sugar().Fatalf("Could not open the database at `%s`: %s", opFlags.DatabaseURL, err.Error())
 	}
 
-	trawlingManager := dht.NewTrawlingManager(opFlags.TrawlerMlAddrs)
+	trawlingManager := dht.NewTrawlingManager(opFlags.BindAddr)
 	metadataSink := bittorrent.NewMetadataSink(2 * time.Minute)
 
 	// The Event Loop
@@ -134,42 +127,42 @@ func main() {
 	}
 }
 
-func parseFlags() (*opFlags, error) {
+func parseFlags() *opFlags {
 	opF := new(opFlags)
 	cmdF := new(cmdFlags)
 
 	_, err := flags.Parse(cmdF)
 	if err != nil {
-		return nil, err
+		// Do not print any error messages as jessevdk/go-flags already did.
+		os.Exit(1)
 	}
 
 	if cmdF.DatabaseURL == "" {
-		opF.DatabaseURL = "sqlite3://" + path.Join(
-				appdirs.UserDataDir("magneticod", "", "", false),
-				"database.sqlite3",
-			)
-	} else {
-		opF.DatabaseURL = cmdF.DatabaseURL
+		cmdF.DatabaseURL = "sqlite3://" + path.Join(
+			appdirs.UserDataDir("magneticod", "", "", false),
+			"database.sqlite3",
+		)
+	}
+	opF.DatabaseURL, err = url.Parse(cmdF.DatabaseURL)
+	if err != nil {
+		zap.L().Fatal("Failed to parse DB URL", zap.Error(err))
 	}
 
-	if err = checkAddrs(cmdF.TrawlerMlAddrs); err != nil {
-		zap.S().Fatalf("Of argument (list) `trawler-ml-addr` %s", err.Error())
-	} else {
-		opF.TrawlerMlAddrs = cmdF.TrawlerMlAddrs
+	for _, addr := range cmdF.BindAddr {
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			zap.L().Fatal("Failed to parse Address", zap.Error(err))
+		}
+		opF.BindAddr = append(opF.BindAddr, udpAddr)
 	}
 
-	// 1 decisecond = 100 milliseconds = 0.1 seconds
-	if cmdF.TrawlerMlInterval == 0 {
-		opF.TrawlerMlInterval = time.Duration(1) * 100 * time.Millisecond
-	} else {
-		opF.TrawlerMlInterval = time.Duration(cmdF.TrawlerMlInterval) * 100 * time.Millisecond
-	}
+	opF.Interval = time.Duration(cmdF.Interval) * time.Millisecond
 
 	opF.Verbosity = len(cmdF.Verbose)
 
 	opF.Profile = cmdF.Profile
 
-	return opF, nil
+	return opF
 }
 
 func checkAddrs(addrs []string) error {

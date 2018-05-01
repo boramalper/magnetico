@@ -1,6 +1,9 @@
 package dht
 
-import "github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
+import (
+	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
+	"net"
+)
 
 type TrawlingManager struct {
 	// private
@@ -8,13 +11,10 @@ type TrawlingManager struct {
 	services []*mainline.TrawlingService
 }
 
-func NewTrawlingManager(mlAddrs []string) *TrawlingManager {
+func NewTrawlingManager(mlAddrs []*net.UDPAddr) *TrawlingManager {
 	manager := new(TrawlingManager)
 	manager.output = make(chan mainline.TrawlingResult)
 
-	if mlAddrs == nil {
-		mlAddrs = []string{"0.0.0.0:0"}
-	}
 	for _, addr := range mlAddrs {
 		manager.services = append(manager.services, mainline.NewTrawlingService(
 			addr,

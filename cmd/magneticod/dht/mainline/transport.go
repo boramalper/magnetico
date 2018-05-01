@@ -19,14 +19,10 @@ type Transport struct {
 	onMessage func(*Message, net.Addr)
 }
 
-func NewTransport(laddr string, onMessage func(*Message, net.Addr)) *Transport {
+func NewTransport(laddr *net.UDPAddr, onMessage func(*Message, net.Addr)) *Transport {
 	transport := new(Transport)
 	transport.onMessage = onMessage
-	var err error
-	transport.laddr, err = net.ResolveUDPAddr("udp", laddr)
-	if err != nil {
-		zap.L().Panic("Could not resolve the UDP address for the trawler!", zap.Error(err))
-	}
+	transport.laddr = laddr
 
 	return transport
 }

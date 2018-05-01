@@ -28,7 +28,7 @@ type ProtocolEventHandlers struct {
 	OnPingORAnnouncePeerResponse func(*Message, net.Addr)
 }
 
-func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol) {
+func NewProtocol(laddr *net.UDPAddr, eventHandlers ProtocolEventHandlers) (p *Protocol) {
 	p = new(Protocol)
 	p.transport = NewTransport(laddr, p.onMessage)
 	p.eventHandlers = eventHandlers
