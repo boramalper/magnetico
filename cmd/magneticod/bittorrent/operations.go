@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/boramalper/magnetico/pkg/persistence"
+	"encoding/hex"
 )
 
 const MAX_METADATA_SIZE = 10 * 1024 * 1024
@@ -36,11 +37,13 @@ type extDict struct {
 }
 
 func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
+	// this one will be used often, so save it in a variable
+	infoHashString := infoHash.String()
 	conn, err := net.DialTCP("tcp", nil, peer.Addr)
 	if err != nil {
 		zap.L().Debug(
 			"awaitMetadata couldn't connect to the peer!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.String("remotePeerAddr", peer.Addr.String()),
 			zap.Error(err),
 		)
@@ -52,7 +55,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if err != nil {
 		zap.L().Panic(
 			"Couldn't set NODELAY!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.String("remotePeerAddr", peer.Addr.String()),
 			zap.Error(err),
 		)
@@ -62,7 +65,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if err != nil {
 		zap.L().Panic(
 			"Couldn't set the deadline!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.String("remotePeerAddr", peer.Addr.String()),
 			zap.Error(err),
 		)
@@ -82,7 +85,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if len(lHandshake) != 68 {
 		zap.L().Panic(
 			"Generated BitTorrent handshake is not of length 68!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.Int("len_lHandshake", len(lHandshake)),
 		)
 	}
@@ -90,7 +93,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if err != nil {
 		zap.L().Debug(
 			"Couldn't write BitTorrent handshake!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.String("remotePeerAddr", peer.Addr.String()),
 			zap.Error(err),
 		)
@@ -103,7 +106,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if err != nil {
 		zap.L().Debug(
 			"Couldn't read remote BitTorrent handshake!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.String("remotePeerAddr", peer.Addr.String()),
 			zap.Error(err),
 		)
@@ -112,7 +115,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if !bytes.HasPrefix(rHandshake, []byte("\x13BitTorrent protocol")) {
 		zap.L().Debug(
 			"Remote BitTorrent handshake is not what it is supposed to be!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.String("remotePeerAddr", peer.Addr.String()),
 			zap.ByteString("rHandshake[:20]", rHandshake[:20]),
 		)
@@ -124,7 +127,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if rHandshake[25] != 16 { // TODO (later): do *not* compare the whole byte, check the bit instead! (0x10)
 		zap.L().Debug(
 			"Peer does not support the extension protocol!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.String("remotePeerAddr", peer.Addr.String()),
 		)
 		return
@@ -133,7 +136,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	writeAll(conn, []byte("\x00\x00\x00\x1a\x14\x00d1:md11:ut_metadatai1eee"))
 	zap.L().Debug(
 		"Extension handshake sent, waiting for the remote's...",
-		zap.ByteString("infoHash", infoHash[:]),
+		zap.String("infoHash", infoHashString),
 		zap.String("remotePeerAddr", peer.Addr.String()),
 	)
 
@@ -144,7 +147,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 		if err != nil {
 			zap.L().Debug(
 				"Couldn't read the first 4 bytes from the remote peer in the loop!",
-				zap.ByteString("infoHash", infoHash[:]),
+				zap.String("infoHash", infoHashString),
 				zap.String("remotePeerAddr", peer.Addr.String()),
 				zap.Error(err),
 			)
@@ -163,7 +166,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 		if err != nil {
 			zap.L().Debug(
 				"Couldn't read the rest of the message from the remote peer in the loop!",
-				zap.ByteString("infoHash", infoHash[:]),
+				zap.String("infoHash", infoHashString),
 				zap.String("remotePeerAddr", peer.Addr.String()),
 				zap.Error(err),
 			)
@@ -175,7 +178,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 		if rMessage[0] != 0x14 { // We are interested only in extension messages, whose first byte is always 0x14
 			zap.L().Debug(
 				"Ignoring the non-extension message.",
-				zap.ByteString("infoHash", infoHash[:]),
+				zap.String("infoHash", infoHashString),
 			)
 			continue
 		}
@@ -297,7 +300,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 
 				zap.L().Debug(
 					"Fetching...",
-					zap.ByteString("infoHash", infoHash[:]),
+					zap.String("infoHash", infoHashString),
 					zap.String("remotePeerAddr", conn.RemoteAddr().String()),
 					zap.Int("metadataReceived", metadataReceived),
 					zap.Int("metadataSize", metadataSize),
@@ -305,7 +308,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 			} else if rExtDict.MsgType == 2 { // reject
 				zap.L().Debug(
 					"Remote peer rejected sending metadata!",
-					zap.ByteString("infoHash", infoHash[:]),
+					zap.String("infoHash", infoHashString),
 					zap.String("remotePeerAddr", conn.RemoteAddr().String()),
 				)
 				return
@@ -322,22 +325,22 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 
 	zap.L().Debug(
 		"Metadata is complete, verifying the checksum...",
-		zap.ByteString("infoHash", infoHash[:]),
+		zap.String("infoHash", infoHashString),
 	)
 
 	sha1Sum := sha1.Sum(metadata)
 	if !bytes.Equal(sha1Sum[:], infoHash[:]) {
 		zap.L().Debug(
 			"Info-hash mismatch!",
-			zap.ByteString("expectedInfoHash", infoHash[:]),
-			zap.ByteString("actualInfoHash", sha1Sum[:]),
+			zap.String("expectedInfoHash", infoHash.String()),
+			zap.String("actualInfoHash", hex.EncodeToString(sha1Sum[:])),
 		)
 		return
 	}
 
 	zap.L().Debug(
 		"Checksum verified, checking the info dictionary...",
-		zap.ByteString("infoHash", infoHash[:]),
+		zap.String("infoHash", infoHashString),
 	)
 
 	info := new(metainfo.Info)
@@ -345,7 +348,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if err != nil {
 		zap.L().Debug(
 			"Couldn't unmarshal info bytes!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.Error(err),
 		)
 		return
@@ -354,7 +357,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 	if err != nil {
 		zap.L().Debug(
 			"Bad info dictionary!",
-			zap.ByteString("infoHash", infoHash[:]),
+			zap.String("infoHash", infoHashString),
 			zap.Error(err),
 		)
 		return
@@ -373,7 +376,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 		if file.Length < 0 {
 			zap.L().Debug(
 				"File size is less than zero!",
-				zap.ByteString("infoHash", infoHash[:]),
+				zap.String("infoHash", infoHashString),
 				zap.String("filePath", file.DisplayPath(info)),
 				zap.Int64("fileSize", file.Length),
 			)
@@ -393,7 +396,7 @@ func (ms *MetadataSink) awaitMetadata(infoHash metainfo.Hash, peer Peer) {
 
 	zap.L().Debug(
 		"Flushing metadata...",
-		zap.ByteString("infoHash", infoHash[:]),
+		zap.String("infoHash", infoHashString),
 	)
 
 	ms.flush(Metadata{

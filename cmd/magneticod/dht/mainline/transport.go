@@ -69,14 +69,20 @@ func (t *Transport) readMessages() {
 			if strings.HasSuffix(err.Error(), "use of closed network connection") {
 				break
 			} else {
-				zap.L().Debug("Could NOT read an UDP packet!", zap.Error(err))
+				zap.L().Debug("Could NOT read an UDP packet!",
+					zap.Error(err),
+					zap.String("peer", addr.String()),
+				)
 			}
 		}
 
 		var msg Message
 		err = bencode.Unmarshal(buffer[:n], &msg)
 		if err != nil {
-			zap.L().Debug("Could NOT unmarshal packet data!", zap.Error(err))
+			zap.L().Debug("Could NOT unmarshal packet data!",
+				zap.Error(err),
+				zap.String("peer", addr.String()),
+			)
 		}
 
 		t.onMessage(&msg, addr)

@@ -9,6 +9,7 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"go.uber.org/zap"
+	"encoding/hex"
 )
 
 type TrawlingResult struct {
@@ -69,7 +70,10 @@ func (s *TrawlingService) Start() {
 	s.protocol.Start()
 	go s.trawl()
 
-	zap.L().Info("Trawling Service started!")
+	zap.L().Info("Trawling Service started!",
+		zap.String("Address", s.protocol.transport.laddr.String()),
+		zap.String("ID", hex.EncodeToString(s.trueNodeID)),
+	)
 }
 
 func (s *TrawlingService) Terminate() {
@@ -82,7 +86,10 @@ func (s *TrawlingService) trawl() {
 		if len(s.routingTable) == 0 {
 			s.bootstrap()
 		} else {
-			zap.L().Debug("Latest status:", zap.Int("n", len(s.routingTable)))
+			zap.L().Debug("Routing table status:",
+				zap.String("ID", hex.EncodeToString(s.trueNodeID)),
+				zap.Int("peers", len(s.routingTable)),
+			)
 			s.findNeighbors()
 			s.routingTable = make(map[string]net.Addr)
 		}
