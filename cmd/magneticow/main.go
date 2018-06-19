@@ -7,16 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"strings"
 	"time"
 
-	//"strconv"
-	"strings"
-	// "time"
-
 	"github.com/dustin/go-humanize"
-	// "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/schema"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -25,8 +21,22 @@ import (
 
 const N_TORRENTS = 20
 
+// Set a Decoder instance as a package global, because it caches
+// meta-data about structs, and an instance can be shared safely.
+var decoder = schema.NewDecoder()
+
 var templates map[string]*template.Template
 var database persistence.Database
+
+// ======= Q: Query =======
+type TorrentsQ struct {
+	Epoch            *int64   `schema:"epoch"`
+	Query            *string  `schema:"query"`
+	OrderBy          *string  `schema:"orderBy"`
+	Ascending        *bool    `schema:"ascending"`
+	LastOrderedValue *float64 `schema:"lastOrderedValue"`
+	LastID           *uint64  `schema:"lastID"`
+}
 
 // ========= TD: TemplateData =========
 type HomepageTD struct {
@@ -41,7 +51,7 @@ type TorrentsTD struct {
 	SortedBy         string
 	NextPageExists   bool
 	Epoch            int64
-	LastOrderedValue uint64
+	LastOrderedValue float64
 	LastID           uint64
 
 }
@@ -72,12 +82,20 @@ func main() {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/", rootHandler)
+
+	router.HandleFunc("/api/v0.1/torrents", apiTorrentsHandler)
+	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-z0-9]{40}}", apiTorrentsInfohashHandler)
+	router.HandleFunc("/api/v0.1/files/{infohash:[a-z0-9]{40}}", apiFilesInfohashHandler)
+	router.HandleFunc("/api/v0.1/statistics", apiStatisticsHandler)
+
 	router.HandleFunc("/torrents", torrentsHandler)
 	router.HandleFunc("/torrents/{infohash:[a-z0-9]{40}}", torrentsInfohashHandler)
 	router.HandleFunc("/statistics", statisticsHandler)
+	router.HandleFunc("/feed", feedHandler)
+
 	router.PathPrefix("/static").HandlerFunc(staticHandler)
 
-	router.HandleFunc("/feed", feedHandler)
+
 
 	templateFunctions := template.FuncMap{
 		"add": func(augend int, addends int) int {
@@ -118,7 +136,7 @@ func main() {
 	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
 	// templates["statistics"] = template.Must(template.New("statistics").Parse(string(mustAsset("templates/statistics.html"))))
 	// templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
-	templates["torrents"] = template.Must(template.New("torrents").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrents.html"))))
+	// templates["torrents"] = template.Must(template.New("torrents").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrents.html"))))
 
 	var err error
 	database, err = persistence.MakeDatabase("sqlite3:///home/bora/.local/share/magneticod/database.sqlite3", logger)
@@ -126,8 +144,14 @@ func main() {
 		panic(err.Error())
 	}
 
+	decoder.IgnoreUnknownKeys(false)
+	decoder.ZeroEmpty(true)
+
 	zap.L().Info("magneticow is ready to serve!")
-	http.ListenAndServe(":8080", router)
+	err = http.ListenAndServe(":10101", router)
+	if err != nil {
+		zap.L().Error("ListenAndServe error", zap.Error(err))
+	}
 }
 
 // DONE
@@ -136,84 +160,26 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err.Error())
 	}
-	templates["homepage"].Execute(w, HomepageTD{
+
+	err = templates["homepage"].Execute(w, HomepageTD{
 		NTorrents: nTorrents,
 	})
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
+// TODO: I think there is a standard lib. function for this
 func respondError(w http.ResponseWriter, statusCode int, format string, a ...interface{}) {
 	w.WriteHeader(statusCode)
 	w.Write([]byte(fmt.Sprintf(format, a...)))
 }
 
+// TODO: we might as well move torrents.html into static...
 func torrentsHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Parsing URL Query is tedious and looks stupid... can we do better?
-	queryValues := r.URL.Query()
-
-	var query string
-	epoch := time.Now().Unix()  // epoch, if not supplied, is NOW.
-	var lastOrderedValue, lastID *uint64
-
-	if query = queryValues.Get("query"); query == "" {
-		respondError(w, 400, "query is missing")
-		return
-	}
-
-	if queryValues.Get("epoch") != "" && queryValues.Get("lastOrderedValue") != "" && queryValues.Get("lastID") != "" {
-		var err error
-
-		epoch, err = strconv.ParseInt(queryValues.Get("epoch"), 10, 64)
-		if err != nil {
-			respondError(w, 400, "error while parsing epoch: %s", err.Error())
-			return
-		}
-		if epoch <= 0 {
-			respondError(w, 400, "epoch has to be greater than zero")
-			return
-		}
-
-		*lastOrderedValue, err = strconv.ParseUint(queryValues.Get("lastOrderedValue"), 10, 64)
-		if err != nil {
-			respondError(w, 400, "error while parsing lastOrderedValue: %s", err.Error())
-			return
-		}
-		if *lastOrderedValue <= 0 {
-			respondError(w, 400, "lastOrderedValue has to be greater than zero")
-			return
-		}
-
-		*lastID, err = strconv.ParseUint(queryValues.Get("lastID"), 10, 64)
-		if err != nil {
-			respondError(w, 400, "error while parsing lastID: %s", err.Error())
-			return
-		}
-		if *lastID <= 0 {
-			respondError(w, 400, "lastID has to be greater than zero")
-			return
-		}
-	} else if !(queryValues.Get("epoch") == "" && queryValues.Get("lastOrderedValue") == "" && queryValues.Get("lastID") == "") {
-		respondError(w, 400, "`epoch`, `lastOrderedValue`, `lastID` must be supplied altogether, if supplied.")
-		return
-	}
-
-	torrents, err := database.QueryTorrents(query, epoch, persistence.ByRelevance, true, 20, nil, nil)
-	if err != nil {
-		respondError(w, 400, "query error: %s", err.Error())
-		return
-	}
-
-	if torrents == nil {
-		panic("torrents is nil!!!")
-	}
-
-	templates["torrents"].Execute(w, TorrentsTD{
-		CanLoadMore:     true,
-		Query:           query,
-		SubscriptionURL: "borabora",
-		Torrents:        torrents,
-		SortedBy:        "anan",
-		NextPageExists:  true,
-	})
+	data := mustAsset("templates/torrents.html")
+	w.Header().Set("Content-Type", http.DetectContentType(data))
+	w.Write(data)
 }
 
 func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {

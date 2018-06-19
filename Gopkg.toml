@@ -27,10 +27,6 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/anacrolix/dht"
-
-[[constraint]]
-  branch = "master"
   name = "github.com/anacrolix/missinggo"
 
 [[constraint]]

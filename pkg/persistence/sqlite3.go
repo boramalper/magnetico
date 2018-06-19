@@ -166,7 +166,7 @@ func (db *sqlite3Database) QueryTorrents(
 	orderBy orderingCriteria,
 	ascending bool,
 	limit uint,
-	lastOrderedValue *uint64,
+	lastOrderedValue *float64,
 	lastID *uint64,
 ) ([]TorrentMetadata, error) {
 	if query == "" && orderBy == ByRelevance {
@@ -177,15 +177,21 @@ func (db *sqlite3Database) QueryTorrents(
 	}
 
 	doJoin    := query != ""
-	firstPage := true // lastID != nil
+	firstPage := lastID == nil
 
 	// executeTemplate is used to prepare the SQL query, WITH PLACEHOLDERS FOR USER INPUT.
 	sqlQuery := executeTemplate(`
-		SELECT info_hash
+		SELECT id 
+             , info_hash
 			 , name
 			 , total_size
 			 , discovered_on
 			 , (SELECT COUNT(*) FROM files WHERE torrents.id = files.torrent_id) AS n_files
+	{{ if .DoJoin }}
+			 , idx.rank
+	{{ else }}
+			 , 0
+	{{ end }}
 		FROM torrents
 	{{ if .DoJoin }}
 		INNER JOIN (
@@ -250,7 +256,16 @@ func (db *sqlite3Database) QueryTorrents(
 	torrents := make([]TorrentMetadata, 0)
 	for rows.Next() {
 		var torrent TorrentMetadata
-		if err = rows.Scan(&torrent.InfoHash, &torrent.Name, &torrent.Size, &torrent.DiscoveredOn, &torrent.NFiles); err != nil {
+		err = rows.Scan(
+			&torrent.ID,
+			&torrent.InfoHash,
+			&torrent.Name,
+			&torrent.Size,
+			&torrent.DiscoveredOn,
+			&torrent.NFiles,
+			&torrent.Relevance,
+		)
+		if err != nil {
 			return nil, err
 		}
 		torrents = append(torrents, torrent)

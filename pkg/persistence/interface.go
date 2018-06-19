@@ -1,6 +1,8 @@
 package persistence
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -21,13 +23,15 @@ type Database interface {
 	// * that match the @query if it's not empty, else all torrents
 	// * ordered by the @orderBy in ascending order if @ascending is true, else in descending order
 	// after skipping (@page * @pageSize) torrents that also fits the criteria above.
+	//
+	// On error, returns (nil, error), otherwise a non-nil slice of TorrentMetadata and nil.
 	QueryTorrents(
 		query string,
 		epoch int64,
 		orderBy orderingCriteria,
 		ascending bool,
 		limit uint,
-		lastOrderedValue *uint64,
+		lastOrderedValue *float64,
 		lastID *uint64,
 	) ([]TorrentMetadata, error)
 	// GetTorrents returns the TorrentExtMetadata for the torrent of the given InfoHash. Will return
@@ -67,11 +71,24 @@ type File struct {
 }
 
 type TorrentMetadata struct {
-	InfoHash     []byte
-	Name         string
-	Size         uint64
-	DiscoveredOn int64
-	NFiles       uint
+	ID           uint64   `json:"id"`
+	InfoHash     []byte   `json:"infoHash"`  // marshalled differently
+	Name         string   `json:"name"`
+	Size         uint64   `json:"size"`
+	DiscoveredOn int64    `json:"discoveredOn"`
+	NFiles       uint     `json:"nFiles"`
+	Relevance    float64  `json:"relevance"`
+}
+
+func (tm *TorrentMetadata) MarshalJSON() ([]byte, error) {
+	type Alias TorrentMetadata
+	return json.Marshal(&struct {
+		InfoHash string `json:"infoHash"`
+		*Alias
+	}{
+		InfoHash: hex.EncodeToString(tm.InfoHash),
+		Alias:    (*Alias)(tm),
+	})
 }
 
 func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {

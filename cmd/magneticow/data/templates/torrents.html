@@ -2,25 +2,35 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ if .Query }}"{{ .Query }}"{{ else }}Most recent torrents{{ end }} - magneticow</title>
+    <title>Search - magneticow</title>
+
     <link rel="stylesheet" href="static/styles/reset.css">
     <link rel="stylesheet" href="static/styles/essential.css">
     <link rel="stylesheet" href="static/styles/torrents.css">
-    <script>
-        var canLoadMore      = {{ if .CanLoadMore }} true {{ else }} false {{ end }};
-        var lastOrderedValue = {{ .LastOrderedValue }};
-        var lastID           = {{ .LastID }};
-    </script>
+
+    <script src="static/scripts/mustache-v2.3.0.min.js"></script>
     <script src="static/scripts/torrents.js"></script>
+
+    <script id="row-template" type="text/x-handlebars-template">
+        <tr>
+            <td><a href="magnet:?xt=urn:btih:{{infoHash}}&dn={{name}}">
+                <img src="static/assets/magnet.gif" alt="Magnet link"
+                     title="Download this torrent using magnet" /></a></td>
+            <td><a href="/torrents/{{infoHash}}/{{name}}">{{name}}</a></td>
+            <td>{{size}}</td>
+            <td>{{discoveredOn}}</td>
+        </tr>
+    </script>
 </head>
 <body>
 <header>
     <div><a href="/"><b>magnetico<sup>w</sup></b></a>&#8203;<sub>(pre-alpha)</sub></div>
+    <!-- TODO: why make a GET request again? handle it client-side -->
     <form action="/torrents" method="get" autocomplete="off" role="search">
-        <input type="search" name="query" placeholder="Search the BitTorrent DHT" value="{{ .Query }}">
+        <input type="search" name="query" placeholder="Search the BitTorrent DHT">
     </form>
     <div>
-        <a href="{{ .SubscriptionURL }}"><img src="static/assets/feed.png"
+        <a href="TODO-NOT-READY-YET"><img src="static/assets/feed.png"
                                               alt="feed icon" title="subscribe" /> subscribe</a>
     </div>
 </header>
@@ -34,22 +44,12 @@
                 <th>Discovered on</th>
             </tr>
         </thead>
-        <tbody>
-        {{ range .Torrents }}
-            <tr>
-                <td><a href="magnet:?xt=urn:btih:{{ bytesToHex .InfoHash }}&dn={{ .Name }}">
-                    <img src="static/assets/magnet.gif" alt="Magnet link"
-                         title="Download this torrent using magnet" /></a></td>
-                <td><a href="/torrents/{{ bytesToHex .InfoHash }}/{{ .Name }}">{{ .Name }}</a></td>
-                <td>{{ humanizeSize .Size }}</td>
-                <td>{{ unixTimeToYearMonthDay .DiscoveredOn }}</td>
-            </tr>
-        {{ end }}
+        <tbody id="rows">
         </tbody>
     </table>
 </main>
 <footer>
-    <button onclick="loadMore();" {{ if not .CanLoadMore }} disabled {{ end }}>
+    <button onclick="load();">
         Load More Results
     </button>
 </footer>
