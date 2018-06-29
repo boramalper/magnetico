@@ -56,6 +56,7 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: use plain Marshal
 	jm, err := json.MarshalIndent(torrents, "", "  ")
 	if err != nil {
 		respondError(w, 500, "json marshalling error: %s", err.Error())

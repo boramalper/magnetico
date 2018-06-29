@@ -126,6 +126,13 @@ func main() {
 			return humanize.IBytes(s)
 		},
 
+		"humanizeSizeF": func(s int64) string {
+			if s < 0 {
+				return ""
+			}
+			return humanize.IBytes(uint64(s))
+		},
+
 		"comma": func(s uint) string {
 			return humanize.Comma(int64(s))
 		},
@@ -135,7 +142,7 @@ func main() {
 	// templates["feed"] = template.Must(template.New("feed").Parse(string(mustAsset("templates/feed.xml"))))
 	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
 	// templates["statistics"] = template.Must(template.New("statistics").Parse(string(mustAsset("templates/statistics.html"))))
-	// templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
+	templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
 	// templates["torrents"] = template.Must(template.New("torrents").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrents.html"))))
 
 	var err error
@@ -182,6 +189,7 @@ func torrentsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// TODO: we might as well move torrent.html into static...
 func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 	// show torrents/{infohash}
 	infoHash, err := hex.DecodeString(mux.Vars(r)["infohash"])
@@ -193,8 +201,32 @@ func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err.Error())
 	}
+	if torrent == nil {
+		w.WriteHeader(404)
+		w.Write([]byte("torrent not found!"))
+		return
+	}
 
-	templates["torrent"].Execute(w, torrent)
+	files, err := database.GetFiles(infoHash)
+	if err != nil {
+		panic(err.Error())
+	}
+	if files == nil {
+		w.WriteHeader(500)
+		w.Write([]byte("files not found what!!!"))
+		return
+	}
+
+	err = templates["torrent"].Execute(w, struct {
+		T *persistence.TorrentMetadata
+		F []persistence.File
+	}{
+		T: torrent,
+		F: files,
+	})
+	if err != nil {
+		panic("error while executing template!")
+	}
 }
 
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {

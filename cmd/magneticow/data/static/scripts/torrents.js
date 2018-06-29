@@ -122,7 +122,7 @@ function encodeQueryData(data) {
 // https://stackoverflow.com/q/10420352/4466589
 function fileSize(fileSizeInBytes) {
     let i = -1;
-    let byteUnits = [' kB', ' MB', ' GB', ' TB', ' PB', ' EB', ' ZB', ' YB'];
+    let byteUnits = [' KiB', ' MiB', ' GiB', ' TiB', ' PiB', ' EiB', ' ZiB', ' YiB'];
     do {
         fileSizeInBytes = fileSizeInBytes / 1024;
         i++;

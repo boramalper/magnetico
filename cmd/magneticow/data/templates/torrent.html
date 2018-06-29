@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ torrent.name }} - magnetico</title>
-    <link rel="stylesheet" href="static/styles/reset.css">
-    <link rel="stylesheet" href="static/styles/essential.css">
-    <link rel="stylesheet" href="static/styles/torrent.css">
-    <script defer src="static/scripts/torrent.js"></script>
+    <title>{{ .T.Name }} - magnetico</title>
+    <link rel="stylesheet" href="/static/styles/reset.css">
+    <link rel="stylesheet" href="/static/styles/essential.css">
+    <link rel="stylesheet" href="/static/styles/torrent.css">
+    <script defer src="/static/scripts/naturalSort-v0.8.1.js"></script>
+    <script defer src="/static/scripts/torrent.js"></script>
 </head>
 <body>
 <header>
@@ -17,39 +18,32 @@
 </header>
 <main>
     <div id="title">
-        <h2>{{ torrent.name }}</h2>
-        <a href="magnet:?xt=urn:btih:{{ torrent.info_hash }}&dn={{ torrent.name }}">
-            <img src="static/assets/magnet.gif" alt="Magnet link"
+        <h2>{{ .T.Name }}</h2>
+        <a href="magnet:?xt=urn:btih:{{ bytesToHex .T.InfoHash }}&amp;dn={{ .T.Name }}">
+            <img src="/static/assets/magnet.gif" alt="Magnet link"
                          title="Download this torrent using magnet" />
-            <small>{{ torrent.info_hash }}</small>
+            <small>{{ bytesToHex .T.InfoHash }}</small>
         </a>
     </div>
 
     <table>
         <tr>
             <th scope="row">Size</th>
-            <td>{{ torrent.size }}</td>
+            <td>{{ humanizeSize .T.Size }}</td>
         </tr>
         <tr>
             <th scope="row">Discovered on</th>
-            <td>{{ torrent.discovered_on }}</td>
+            <td>{{ unixTimeToYearMonthDay .T.DiscoveredOn }}</td>
         </tr>
         <tr>
             <th scope="row">Files</th>
-            <td>{{ torrent.files|length }}</td>
+            <td>{{ .T.NFiles }}</td>
         </tr>
     </table>
 
     <h3>Contents</h3>
-    <noscript>
-        <pre>
-{% for file in torrent.files -%}
-{{ file.path }}{{ "\n" }}
-{%- endfor %}
-        </pre>
-    </noscript>
     <!-- Content of this element will be overwritten by the script -->
-    <pre>{% for file in torrent.files -%}{{ file.path }}{{ "\t" + file.size }}{{ "\n" }}{%- endfor %}</pre>
+    <pre>{{ range .F }}{{ .Path }}{{ "\t" }}{{ humanizeSizeF .Size }}{{ "\n" }}{{ end }}</pre>
 </main>
 </body>
 </html>

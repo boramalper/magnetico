@@ -11,6 +11,7 @@
 window.onload = function() {
     var pre_element = document.getElementsByTagName("pre")[0];
     var paths = pre_element.textContent.replace(/\s+$/, "").split("\n");
+    paths.sort(naturalSort);
     paths = paths.map(function(path) { return path.split('/'); });
     pre_element.textContent = stringify(structurise(paths)).join("\n");
 };
