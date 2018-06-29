@@ -163,7 +163,7 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 func (db *sqlite3Database) QueryTorrents(
 	query string,
 	epoch int64,
-	orderBy orderingCriteria,
+	orderBy OrderingCriteria,
 	ascending bool,
 	limit uint,
 	lastOrderedValue *float64,
@@ -278,12 +278,12 @@ func (db *sqlite3Database) QueryTorrents(
 	return torrents, nil
 }
 
-func orderOn(orderBy orderingCriteria) string {
+func orderOn(orderBy OrderingCriteria) string {
 	switch orderBy {
 	case ByRelevance:
 		return "idx.rank"
 
-	case BySize:
+	case ByTotalSize:
 		return "total_size"
 
 	case ByDiscoveredOn:

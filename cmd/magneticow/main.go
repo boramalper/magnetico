@@ -38,33 +38,6 @@ type TorrentsQ struct {
 	LastID           *uint64  `schema:"lastID"`
 }
 
-// ========= TD: TemplateData =========
-type HomepageTD struct {
-	NTorrents uint
-}
-
-type TorrentsTD struct {
-	CanLoadMore      bool
-	Query            string
-	SubscriptionURL  string
-	Torrents         []persistence.TorrentMetadata
-	SortedBy         string
-	NextPageExists   bool
-	Epoch            int64
-	LastOrderedValue float64
-	LastID           uint64
-
-}
-
-type TorrentTD struct {
-}
-
-type FeedTD struct {
-}
-
-type StatisticsTD struct {
-}
-
 func main() {
 	loggerLevel := zap.NewAtomicLevel()
 	// Logging levels: ("debug", "info", "warn", "error", "dpanic", "panic", and "fatal").
@@ -168,7 +141,9 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		panic(err.Error())
 	}
 
-	err = templates["homepage"].Execute(w, HomepageTD{
+	err = templates["homepage"].Execute(w, struct {
+		NTorrents uint
+	}{
 		NTorrents: nTorrents,
 	})
 	if err != nil {
@@ -189,9 +164,7 @@ func torrentsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-// TODO: we might as well move torrent.html into static...
 func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
-	// show torrents/{infohash}
 	infoHash, err := hex.DecodeString(mux.Vars(r)["infohash"])
 	if err != nil {
 		panic(err.Error())

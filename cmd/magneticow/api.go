@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -48,8 +49,14 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 		*tq.Ascending = true
 	}
 
+	orderBy, err := parseOrderBy(tq.OrderBy)
+	if err != nil {
+		respondError(w, 400, err.Error())
+		return
+	}
+
 	torrents, err := database.QueryTorrents(
-		*tq.Query, *tq.Epoch, persistence.ByRelevance,
+		*tq.Query, *tq.Epoch, orderBy,
 		*tq.Ascending, N_TORRENTS, tq.LastOrderedValue, tq.LastID)
 	if err != nil {
 		respondError(w, 400, "query error: %s", err.Error())
@@ -78,4 +85,33 @@ func apiFilesInfohashHandler(w http.ResponseWriter, r *http.Request) {
 
 func apiStatisticsHandler(w http.ResponseWriter, r *http.Request) {
 
+}
+
+func parseOrderBy(s *string) (persistence.OrderingCriteria, error) {
+	if s == nil {
+		return persistence.ByRelevance, nil
+	}
+
+	switch *s {
+	case "TOTAL_SIZE":
+		return persistence.ByTotalSize, nil
+
+	case "DISCOVERED_ON":
+		return persistence.ByDiscoveredOn, nil
+
+	case "N_FILES":
+		return persistence.ByNFiles, nil
+
+	case "UPDATED_ON":
+		return persistence.ByUpdatedOn, nil
+
+	case "N_SEEDERS":
+		return persistence.ByNSeeders, nil
+
+	case "N_LEECHERS":
+		return persistence.ByNLeechers, nil
+
+	default:
+		return persistence.ByDiscoveredOn, fmt.Errorf("unknown orderBy string: %s", s)
+	}
 }

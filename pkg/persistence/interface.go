@@ -28,7 +28,7 @@ type Database interface {
 	QueryTorrents(
 		query string,
 		epoch int64,
-		orderBy orderingCriteria,
+		orderBy OrderingCriteria,
 		ascending bool,
 		limit uint,
 		lastOrderedValue *float64,
@@ -41,15 +41,17 @@ type Database interface {
 	GetStatistics(n uint, to string) (*Statistics, error)
 }
 
-type orderingCriteria uint8
+type OrderingCriteria uint8
 const (
-	ByRelevance orderingCriteria = iota
-	BySize
+	ByRelevance OrderingCriteria = iota
+	ByTotalSize
 	ByDiscoveredOn
 	ByNFiles
 	ByNSeeders
 	ByNLeechers
+	ByUpdatedOn
 )
+// TODO: search `swtich (orderBy)` and see if all cases are covered all the time
 
 type databaseEngine uint8
 const (
