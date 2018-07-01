@@ -203,10 +203,9 @@ func (db *sqlite3Database) QueryTorrents(
 	{{ end }}
 		WHERE     modified_on <= ?
 	{{ if not .FirstPage }}
-			  AND id > ?
-			  AND {{ .OrderOn }} {{ GTEorLTE .Ascending }} ?
+			  AND ( {{.OrderOn}}, id ) {{GTEorLTE .Ascending}} (?, ?) -- https://www.sqlite.org/rowvalue.html#row_value_comparisons
 	{{ end }}
-		ORDER BY {{ .OrderOn }} {{ AscOrDesc .Ascending }}, id ASC
+		ORDER BY {{.OrderOn}} {{AscOrDesc .Ascending}}, id {{AscOrDesc .Ascending}}
 		LIMIT ?;	
 	`, struct {
 		DoJoin bool
@@ -220,7 +219,6 @@ func (db *sqlite3Database) QueryTorrents(
 		Ascending: ascending,
 	}, template.FuncMap{
 		"GTEorLTE": func(ascending bool) string {
-			// TODO: or maybe vice versa idk
 			if ascending {
 				return ">"
 			} else {
@@ -243,8 +241,8 @@ func (db *sqlite3Database) QueryTorrents(
 	}
 	queryArgs = append(queryArgs, epoch)
 	if !firstPage {
-		queryArgs = append(queryArgs, lastID)
 		queryArgs = append(queryArgs, lastOrderedValue)
+		queryArgs = append(queryArgs, lastID)
 	}
 	queryArgs = append(queryArgs, limit)
 
