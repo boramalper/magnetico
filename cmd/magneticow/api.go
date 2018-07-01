@@ -49,10 +49,20 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 		*tq.Ascending = true
 	}
 
-	orderBy, err := parseOrderBy(tq.OrderBy)
-	if err != nil {
-		respondError(w, 400, err.Error())
-		return
+	var orderBy persistence.OrderingCriteria
+	if tq.OrderBy == nil {
+		if *tq.Query == "" {
+			orderBy = persistence.ByDiscoveredOn
+		} else {
+			orderBy = persistence.ByRelevance
+		}
+	} else {
+		var err error
+		orderBy, err = parseOrderBy(*tq.OrderBy)
+		if err != nil {
+			respondError(w, 400, err.Error())
+			return
+		}
 	}
 
 	torrents, err := database.QueryTorrents(
@@ -87,12 +97,8 @@ func apiStatisticsHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func parseOrderBy(s *string) (persistence.OrderingCriteria, error) {
-	if s == nil {
-		return persistence.ByRelevance, nil
-	}
-
-	switch *s {
+func parseOrderBy(s string) (persistence.OrderingCriteria, error) {
+	switch s {
 	case "TOTAL_SIZE":
 		return persistence.ByTotalSize, nil
 

@@ -17,9 +17,19 @@ window.onload = function() {
         title.textContent = query + " - magneticow";
         const input = document.getElementsByTagName("input")[0];
         input.setAttribute("value", query);
-    }
-    else
+
+        setOrderBy("RELEVANCE");
+    } else {
         title.textContent = "Most recent torrents - magneticow";
+
+        ascending = false;
+        setOrderBy("DISCOVERED_ON");
+    }
+
+    if (query) {
+        const feedAnchor = document.getElementById("feed-anchor");
+        feedAnchor.setAttribute("href", "/feed?query=" + encodeURIComponent(query));
+    }
 
     load();
 };
@@ -63,7 +73,9 @@ function load() {
         query           : query,
         epoch           : epoch,
         lastID          : lastID,
-        lastOrderedValue: lastOrderedValue
+        lastOrderedValue: lastOrderedValue,
+        orderBy         : orderBy,
+        ascending       : ascending
     });
 
     console.log("reqURL", reqURL);
@@ -86,6 +98,10 @@ function load() {
             return;
         }
 
+        const last = torrents[torrents.length - 1];
+        lastID           = last.id;
+        lastOrderedValue = orderedValue(last);
+
         for (let t of torrents) {
             t.size = fileSize(t.size);
             t.discoveredOn = (new Date(t.discoveredOn * 1000)).toLocaleDateString("en-GB", {
@@ -96,10 +112,6 @@ function load() {
 
             tbody.innerHTML += Mustache.render(template, t);
         }
-
-        const last = torrents[torrents.length - 1];
-        lastID           = last.id;
-        lastOrderedValue = orderedValue(last);
     };
 
     req.open("GET", reqURL);
