@@ -68,8 +68,6 @@ func main() {
 
 	router.PathPrefix("/static").HandlerFunc(staticHandler)
 
-
-
 	templateFunctions := template.FuncMap{
 		"add": func(augend int, addends int) int {
 			return augend + addends
@@ -112,7 +110,7 @@ func main() {
 	}
 
 	templates = make(map[string]*template.Template)
-	// templates["feed"] = template.Must(template.New("feed").Parse(string(mustAsset("templates/feed.xml"))))
+	templates["feed"] = template.Must(template.New("feed").Funcs(templateFunctions).Parse(string(mustAsset("templates/feed.xml"))))
 	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
 	// templates["statistics"] = template.Must(template.New("statistics").Parse(string(mustAsset("templates/statistics.html"))))
 	templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
@@ -203,11 +201,86 @@ func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {
+	torrents, err := database.QueryTorrents(
+		"",
+		time.Now().Unix(),
+		persistence.ByDiscoveredOn,
+		false,
+		20,
+		nil,
+		nil,
+	)
+	if err != nil {
+		respondError(w, 400, err.Error())
+		return
+	}
 
+	err = templates["homepage"].Execute(w, struct {
+		Title    string
+		Torrents []persistence.TorrentMetadata
+	}{
+		Title: "TODO",
+		Torrents: torrents,
+	})
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func feedHandler(w http.ResponseWriter, r *http.Request) {
+	var query, title string
+	switch len(r.URL.Query()["query"]) {
+	case 0:
+		query = ""
+	case 1:
+		query = r.URL.Query()["query"][0]
+	default:
+		respondError(w, 400, "query supplied multiple times!")
+		return
+	}
 
+	if query == "" {
+		title = "Most recent torrents - magneticow"
+	} else {
+		title = "`" + query + "` - magneticow"
+	}
+
+	torrents, err := database.QueryTorrents(
+		query,
+		time.Now().Unix(),
+		persistence.ByDiscoveredOn,
+		false,
+		N_TORRENTS,
+		nil,
+		nil,
+	)
+	if err != nil {
+		respondError(w, 400, err.Error())
+		return
+	}
+
+	// It is much more convenient to write the XML deceleration manually*, and then process the XML
+	// template using template/html and send, then to use encoding/xml.
+	//
+	// *: https://github.com/golang/go/issues/3133
+	//
+	// TODO: maybe do it properly, even if it's inconvenient?
+
+	_, err = w.Write([]byte(`<?xml version="1.0" encoding="utf-8" standalone="yes"?>`))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	err = templates["feed"].Execute(w, struct {
+		Title    string
+		Torrents []persistence.TorrentMetadata
+	}{
+		Title: title,
+		Torrents: torrents,
+	})
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func staticHandler(w http.ResponseWriter, r *http.Request) {
