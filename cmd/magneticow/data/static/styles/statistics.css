@@ -19,3 +19,12 @@ header a {
     border-style: solid;
     border-width: 1px;
 }
+
+
+#options {
+    margin-bottom: 2em;
+}
+
+#options #n {
+    width: 3em;
+}

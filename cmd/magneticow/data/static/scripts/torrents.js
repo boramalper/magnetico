@@ -117,28 +117,3 @@ function load() {
     req.open("GET", reqURL);
     req.send();
 }
-
-
-// Source: https://stackoverflow.com/a/111545/4466589
-function encodeQueryData(data) {
-    let ret = [];
-    for (let d in data) {
-        if (data[d] === null || data[d] === undefined)
-            continue;
-        ret.push(encodeURIComponent(d) + "=" + encodeURIComponent(data[d]));
-    }
-    return ret.join("&");
-}
-
-
-// https://stackoverflow.com/q/10420352/4466589
-function fileSize(fileSizeInBytes) {
-    let i = -1;
-    let byteUnits = [' KiB', ' MiB', ' GiB', ' TiB', ' PiB', ' EiB', ' ZiB', ' YiB'];
-    do {
-        fileSizeInBytes = fileSizeInBytes / 1024;
-        i++;
-    } while (fileSizeInBytes > 1024);
-
-    return Math.max(fileSizeInBytes, 0.1).toFixed(1) + byteUnits[i];
-}

@@ -3,27 +3,37 @@
 <head>
     <meta charset="utf-8">
     <title>Statistics - magneticow</title>
+
     <link rel="stylesheet" href="static/styles/reset.css">
     <link rel="stylesheet" href="static/styles/essential.css">
     <link rel="stylesheet" href="static/styles/statistics.css">
+
     <script defer src="static/scripts/plotly-v1.26.1.min.js"></script>
+    <script defer src="static/scripts/common.js"></script>
     <script defer src="static/scripts/statistics.js"></script>
 </head>
 <body>
 <header>
-    <script>
-        var discoveryRateData = [{
-            x: {{ dates | safe }},
-            y: {{ amounts | safe }},
-            mode: "lines+markers"
-        }];
-    </script>
-
     <div><a href="/"><b>magnetico<sup>w</sup></b></a>&#8203;<sub>(pre-alpha)</sub></div>
 </header>
 
 <main>
-    <div id="discoveryRateGraph"></div>
+    <div id="options">
+        <p>Show statistics for the past...
+
+        <input id="n" title="maximum number of time units from now backwards" type="number" value="24" min="5" max="365">
+        <select id="unit" title="time unit to be used" required>
+            <!-- values are in seconds -->
+            <option value="hours" selected>Hours</option>
+            <option value="days">Days</option>
+            <option value="weeks">Weeks</option>
+            <option value="months">Months</option> <!-- 30 days -->
+            <option value="years">Years</option> <!-- 365 days -->
+        </select>.</p>
+    </div>
+    <div class="graph" id="nDiscovered"></div>
+    <div class="graph" id="nFiles"></div>
+    <div class="graph" id="totalSize"></div>
 </main>
 </body>
 </html>

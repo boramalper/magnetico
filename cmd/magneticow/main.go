@@ -200,31 +200,11 @@ func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO: we might as well move statistics.html into static...
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {
-	torrents, err := database.QueryTorrents(
-		"",
-		time.Now().Unix(),
-		persistence.ByDiscoveredOn,
-		false,
-		20,
-		nil,
-		nil,
-	)
-	if err != nil {
-		respondError(w, 400, err.Error())
-		return
-	}
-
-	err = templates["homepage"].Execute(w, struct {
-		Title    string
-		Torrents []persistence.TorrentMetadata
-	}{
-		Title: "TODO",
-		Torrents: torrents,
-	})
-	if err != nil {
-		panic(err.Error())
-	}
+	data := mustAsset("templates/statistics.html")
+	w.Header().Set("Content-Type", http.DetectContentType(data))
+	w.Write(data)
 }
 
 func feedHandler(w http.ResponseWriter, r *http.Request) {

@@ -38,7 +38,7 @@ type Database interface {
 	// nil, nil if the torrent does not exist in the database.
 	GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 	GetFiles(infoHash []byte) ([]File, error)
-	GetStatistics(n uint, to string) (*Statistics, error)
+	GetStatistics(from string, n uint) (*Statistics, error)
 }
 
 type OrderingCriteria uint8
@@ -59,12 +59,13 @@ const (
 )
 
 type Statistics struct {
-	N uint64
+	NDiscovered map[string]uint64    `json:"nDiscovered"`
+	NFiles      map[string]uint64  `json:"nFiles"`
+	TotalSize   map[string]uint64  `json:"totalSize"`
 
 	// All these slices below have the exact length equal to the Period.
-	NTorrents []uint64
-	NFiles    []uint64
-	TotalSize []uint64
+	//NDiscovered []uint64  `json:"nDiscovered"`
+
 }
 
 type File struct {
@@ -116,4 +117,12 @@ func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 	default:
 		return nil, fmt.Errorf("unknown URI scheme (database engine)!")
 	}
+}
+
+func NewStatistics() (s *Statistics) {
+	s = new(Statistics)
+	s.NDiscovered = make(map[string]uint64)
+	s.NFiles      = make(map[string]uint64)
+	s.TotalSize   = make(map[string]uint64)
+	return
 }

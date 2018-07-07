@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/boramalper/magnetico/pkg/persistence"
@@ -94,11 +95,48 @@ func apiFilesInfohashHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiStatisticsHandler(w http.ResponseWriter, r *http.Request) {
+	from := r.URL.Query().Get("from")
 
+	// TODO: use gorilla?
+	var n int64
+	nStr := r.URL.Query().Get("n")
+	if nStr == "" {
+		n = 0
+	} else {
+		var err error
+		n, err = strconv.ParseInt(nStr, 10, 32)
+		if err != nil {
+			respondError(w, 400, "couldn't parse n: %s", err.Error())
+			return
+		} else if n <= 0 {
+			respondError(w, 400, "n must be a positive number")
+			return
+		}
+	}
+
+	stats, err := database.GetStatistics(from, uint(n))
+	if err != nil {
+		respondError(w, 400, "error while getting statistics: %s", err.Error())
+		return
+	}
+
+	// TODO: use plain Marshal
+	jm, err := json.MarshalIndent(stats, "", "  ")
+	if err != nil {
+		respondError(w, 500, "json marshalling error: %s", err.Error())
+		return
+	}
+
+	if _, err = w.Write(jm); err != nil {
+		zap.L().Warn("couldn't write http.ResponseWriter", zap.Error(err))
+	}
 }
 
 func parseOrderBy(s string) (persistence.OrderingCriteria, error) {
 	switch s {
+	case "RELEVANCE":
+		return persistence.ByRelevance, nil
+
 	case "TOTAL_SIZE":
 		return persistence.ByTotalSize, nil
 

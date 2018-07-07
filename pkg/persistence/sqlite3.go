@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"text/template"
 	"net/url"
 	"os"
 	"path"
+	"text/template"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -351,17 +351,67 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 	return files, nil
 }
 
-func (db *sqlite3Database) GetStatistics(n uint, to string) (*Statistics, error) {
-	/*
-	to_time, granularity, err := ParseISO8601(to)
+func (db *sqlite3Database) GetStatistics(from string, n uint) (*Statistics, error) {
+	fromTime, gran, err := ParseISO8601(from)
 	if err != nil {
-		return nil, fmt.Errorf("parsing @to error: %s", err.Error())
+		return nil, fmt.Errorf("error while parsing from: %s", err.Error())
 	}
 
-	// TODO
-	*/
+	var toTime time.Time
+	var timef  string  // time format: https://www.sqlite.org/lang_datefunc.html
 
-	return nil, nil
+	switch gran {
+	case Year:
+		toTime = fromTime.AddDate(int(n), 0, 0)
+		timef  = "%Y"
+	case Month:
+		toTime = fromTime.AddDate(0, int(n), 0)
+		timef  = "%Y-%m"
+	case Week:
+		toTime = fromTime.AddDate(0, 0, int(n) * 7)
+		timef  = "%Y-%W"
+	case Day:
+		toTime = fromTime.AddDate(0, 0, int(n))
+		timef  = "%Y-%m-%d"
+	case Hour:
+		toTime = fromTime.Add(time.Duration(n) * time.Hour)
+		timef  = "%Y-%m-%dT%H"
+	}
+
+	// TODO: make it faster!
+	rows, err := db.conn.Query(fmt.Sprintf(`
+			SELECT strftime('%s', discovered_on, 'unixepoch') AS dT
+                 , sum(files.size) AS tS
+                 , count(DISTINCT torrents.id) AS nD              
+                 , count(DISTINCT files.id) AS nF
+			FROM torrents, files
+ 			WHERE     torrents.id = files.torrent_id
+                  AND discovered_on >= ?
+                  AND discovered_on <= ?
+			GROUP BY dt;`,
+			timef),
+		fromTime.Unix(), toTime.Unix())
+	if err != nil {
+		return nil, err
+	}
+
+	stats := NewStatistics()
+
+	for rows.Next() {
+		var dT string
+		var tS, nD, nF uint64
+		if err := rows.Scan(&dT, &tS, &nD, &nF); err != nil {
+			if err := rows.Close(); err != nil {
+				panic(err.Error())
+			}
+			return nil, err
+		}
+		stats.NDiscovered[dT] = nD
+		stats.TotalSize[dT] = tS
+		stats.NFiles[dT] = nF
+	}
+
+	return stats, nil
 }
 
 func (db *sqlite3Database) setupDatabase() error {
