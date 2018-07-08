@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/boramalper/magnetico/pkg/persistence"
+	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
 
@@ -87,11 +89,57 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiTorrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
+	infohashHex := mux.Vars(r)["infohash"]
 
+	infohash, err := hex.DecodeString(infohashHex)
+	if err != nil {
+		respondError(w, 400, "couldn't decode infohash: %s", err.Error())
+		return
+	}
+
+	torrent, err := database.GetTorrent(infohash)
+	if err != nil {
+		respondError(w, 500, "couldn't get torrent: %s", err.Error())
+		return
+	}
+
+	// TODO: use plain Marshal
+	jm, err := json.MarshalIndent(torrent, "", "  ")
+	if err != nil {
+		respondError(w, 500, "json marshalling error: %s", err.Error())
+		return
+	}
+
+	if _, err = w.Write(jm); err != nil {
+		zap.L().Warn("couldn't write http.ResponseWriter", zap.Error(err))
+	}
 }
 
 func apiFilesInfohashHandler(w http.ResponseWriter, r *http.Request) {
+	infohashHex := mux.Vars(r)["infohash"]
 
+	infohash, err := hex.DecodeString(infohashHex)
+	if err != nil {
+		respondError(w, 400, "couldn't decode infohash: %s", err.Error())
+		return
+	}
+
+	files, err := database.GetFiles(infohash)
+	if err != nil {
+		respondError(w, 500, "couldn't get files: %s", err.Error())
+		return
+	}
+
+	// TODO: use plain Marshal
+	jm, err := json.MarshalIndent(files, "", "  ")
+	if err != nil {
+		respondError(w, 500, "json marshalling error: %s", err.Error())
+		return
+	}
+
+	if _, err = w.Write(jm); err != nil {
+		zap.L().Warn("couldn't write http.ResponseWriter", zap.Error(err))
+	}
 }
 
 func apiStatisticsHandler(w http.ResponseWriter, r *http.Request) {

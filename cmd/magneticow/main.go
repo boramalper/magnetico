@@ -57,12 +57,12 @@ func main() {
 	router.HandleFunc("/", rootHandler)
 
 	router.HandleFunc("/api/v0.1/torrents", apiTorrentsHandler)
-	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-z0-9]{40}}", apiTorrentsInfohashHandler)
-	router.HandleFunc("/api/v0.1/files/{infohash:[a-z0-9]{40}}", apiFilesInfohashHandler)
+	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}", apiTorrentsInfohashHandler)
+	router.HandleFunc("/api/v0.1/files/{infohash:[a-f0-9]{40}}", apiFilesInfohashHandler)
 	router.HandleFunc("/api/v0.1/statistics", apiStatisticsHandler)
 
 	router.HandleFunc("/torrents", torrentsHandler)
-	router.HandleFunc("/torrents/{infohash:[a-z0-9]{40}}", torrentsInfohashHandler)
+	router.HandleFunc("/torrents/{infohash:[a-f0-9]{40}}", torrentsInfohashHandler)
 	router.HandleFunc("/statistics", statisticsHandler)
 	router.HandleFunc("/feed", feedHandler)
 

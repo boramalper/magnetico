@@ -69,8 +69,8 @@ type Statistics struct {
 }
 
 type File struct {
-	Size int64
-	Path string
+	Size int64   `json:"size"`
+	Path string  `json:"path"`
 }
 
 type TorrentMetadata struct {
