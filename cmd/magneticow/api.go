@@ -23,7 +23,14 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var tq TorrentsQ
+	var tq struct {
+		Epoch            *int64   `schema:"epoch"`
+		Query            *string  `schema:"query"`
+		OrderBy          *string  `schema:"orderBy"`
+		Ascending        *bool    `schema:"ascending"`
+		LastOrderedValue *float64 `schema:"lastOrderedValue"`
+		LastID           *uint64  `schema:"lastID"`
+	}
 	if err := decoder.Decode(&tq, r.URL.Query()); err != nil {
 		respondError(w, 400, "error while parsing the URL: %s", err.Error())
 		return

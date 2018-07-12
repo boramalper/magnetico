@@ -1,20 +1,30 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"strings"
+	"os/signal"
+	"path"
+	"regexp"
+	"sync"
+	"syscall"
 	"time"
 
+	"github.com/Wessie/appdirs"
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
+	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/boramalper/magnetico/pkg/persistence"
 )
@@ -28,14 +38,12 @@ var decoder = schema.NewDecoder()
 var templates map[string]*template.Template
 var database persistence.Database
 
-// ======= Q: Query =======
-type TorrentsQ struct {
-	Epoch            *int64   `schema:"epoch"`
-	Query            *string  `schema:"query"`
-	OrderBy          *string  `schema:"orderBy"`
-	Ascending        *bool    `schema:"ascending"`
-	LastOrderedValue *float64 `schema:"lastOrderedValue"`
-	LastID           *uint64  `schema:"lastID"`
+var opts struct{
+	Addr               string
+	Database           string
+	Credentials        map[string][]byte  // TODO: encapsulate credentials and mutex for safety
+	CredentialsRWMutex sync.RWMutex
+	CredentialsPath    string
 }
 
 func main() {
@@ -53,20 +61,51 @@ func main() {
 	zap.L().Info("Copyright (C) 2017  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 
+	if err := parseFlags(); err != nil {
+		zap.L().Error("Error while initializing", zap.Error(err))
+		return
+	}
+
+	// Reload credentials when you receive SIGHUP
+	sighupChan := make(chan os.Signal, 1)
+	signal.Notify(sighupChan, syscall.SIGHUP)
+	go func() {
+		for range sighupChan {
+			opts.CredentialsRWMutex.Lock()
+			if opts.Credentials == nil {
+				zap.L().Warn("Ignoring SIGHUP since `no-auth` was supplied")
+				continue
+			}
+
+			opts.Credentials = make(map[string][]byte)  // Clear opts.Credentials
+			opts.CredentialsRWMutex.Unlock()
+			if err := loadCred(opts.CredentialsPath); err != nil {  // Reload credentials
+				zap.L().Warn("couldn't load credentials", zap.Error(err))
+			}
+		}
+	}()
+
 	router := mux.NewRouter()
-	router.HandleFunc("/", rootHandler)
-
-	router.HandleFunc("/api/v0.1/torrents", apiTorrentsHandler)
-	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}", apiTorrentsInfohashHandler)
-	router.HandleFunc("/api/v0.1/files/{infohash:[a-f0-9]{40}}", apiFilesInfohashHandler)
-	router.HandleFunc("/api/v0.1/statistics", apiStatisticsHandler)
-
-	router.HandleFunc("/torrents", torrentsHandler)
-	router.HandleFunc("/torrents/{infohash:[a-f0-9]{40}}", torrentsInfohashHandler)
-	router.HandleFunc("/statistics", statisticsHandler)
-	router.HandleFunc("/feed", feedHandler)
-
-	router.PathPrefix("/static").HandlerFunc(staticHandler)
+	router.HandleFunc("/",
+		BasicAuth(rootHandler, "magneticow"))
+	router.HandleFunc("/api/v0.1/files/{infohash:[a-f0-9]{40}}",
+		BasicAuth(apiFilesInfohashHandler, "magneticow"))
+	router.HandleFunc("/api/v0.1/statistics",
+		BasicAuth(apiStatisticsHandler, "magneticow"))
+	router.HandleFunc("/api/v0.1/torrents",
+		BasicAuth(apiTorrentsHandler, "magneticow"))
+	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}",
+		BasicAuth(apiTorrentsInfohashHandler, "magneticow"))
+	router.HandleFunc("/feed",
+		BasicAuth(feedHandler, "magneticow"))
+	router.PathPrefix("/static").HandlerFunc(
+		BasicAuth(staticHandler, "magneticow"))
+	router.HandleFunc("/statistics",
+		BasicAuth(statisticsHandler, "magneticow"))
+	router.HandleFunc("/torrents",
+		BasicAuth(torrentsHandler, "magneticow"))
+	router.HandleFunc("/torrents/{infohash:[a-f0-9]{40}}",
+		BasicAuth(torrentsInfohashHandler, "magneticow"))
 
 	templateFunctions := template.FuncMap{
 		"add": func(augend int, addends int) int {
@@ -112,12 +151,10 @@ func main() {
 	templates = make(map[string]*template.Template)
 	templates["feed"] = template.Must(template.New("feed").Funcs(templateFunctions).Parse(string(mustAsset("templates/feed.xml"))))
 	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
-	// templates["statistics"] = template.Must(template.New("statistics").Parse(string(mustAsset("templates/statistics.html"))))
 	templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
-	// templates["torrents"] = template.Must(template.New("torrents").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrents.html"))))
 
 	var err error
-	database, err = persistence.MakeDatabase("sqlite3:///home/bora/.local/share/magneticod/database.sqlite3", logger)
+	database, err = persistence.MakeDatabase(opts.Database, logger)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -126,26 +163,9 @@ func main() {
 	decoder.ZeroEmpty(true)
 
 	zap.L().Info("magneticow is ready to serve!")
-	err = http.ListenAndServe(":10101", router)
+	err = http.ListenAndServe(opts.Addr, router)
 	if err != nil {
 		zap.L().Error("ListenAndServe error", zap.Error(err))
-	}
-}
-
-// DONE
-func rootHandler(w http.ResponseWriter, r *http.Request) {
-	nTorrents, err := database.GetNumberOfTorrents()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	err = templates["homepage"].Execute(w, struct {
-		NTorrents uint
-	}{
-		NTorrents: nTorrents,
-	})
-	if err != nil {
-		panic(err.Error())
 	}
 }
 
@@ -155,130 +175,6 @@ func respondError(w http.ResponseWriter, statusCode int, format string, a ...int
 	w.Write([]byte(fmt.Sprintf(format, a...)))
 }
 
-// TODO: we might as well move torrents.html into static...
-func torrentsHandler(w http.ResponseWriter, r *http.Request) {
-	data := mustAsset("templates/torrents.html")
-	w.Header().Set("Content-Type", http.DetectContentType(data))
-	w.Write(data)
-}
-
-func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
-	infoHash, err := hex.DecodeString(mux.Vars(r)["infohash"])
-	if err != nil {
-		panic(err.Error())
-	}
-
-	torrent, err := database.GetTorrent(infoHash)
-	if err != nil {
-		panic(err.Error())
-	}
-	if torrent == nil {
-		w.WriteHeader(404)
-		w.Write([]byte("torrent not found!"))
-		return
-	}
-
-	files, err := database.GetFiles(infoHash)
-	if err != nil {
-		panic(err.Error())
-	}
-	if files == nil {
-		w.WriteHeader(500)
-		w.Write([]byte("files not found what!!!"))
-		return
-	}
-
-	err = templates["torrent"].Execute(w, struct {
-		T *persistence.TorrentMetadata
-		F []persistence.File
-	}{
-		T: torrent,
-		F: files,
-	})
-	if err != nil {
-		panic("error while executing template!")
-	}
-}
-
-// TODO: we might as well move statistics.html into static...
-func statisticsHandler(w http.ResponseWriter, r *http.Request) {
-	data := mustAsset("templates/statistics.html")
-	w.Header().Set("Content-Type", http.DetectContentType(data))
-	w.Write(data)
-}
-
-func feedHandler(w http.ResponseWriter, r *http.Request) {
-	var query, title string
-	switch len(r.URL.Query()["query"]) {
-	case 0:
-		query = ""
-	case 1:
-		query = r.URL.Query()["query"][0]
-	default:
-		respondError(w, 400, "query supplied multiple times!")
-		return
-	}
-
-	if query == "" {
-		title = "Most recent torrents - magneticow"
-	} else {
-		title = "`" + query + "` - magneticow"
-	}
-
-	torrents, err := database.QueryTorrents(
-		query,
-		time.Now().Unix(),
-		persistence.ByDiscoveredOn,
-		false,
-		N_TORRENTS,
-		nil,
-		nil,
-	)
-	if err != nil {
-		respondError(w, 400, err.Error())
-		return
-	}
-
-	// It is much more convenient to write the XML deceleration manually*, and then process the XML
-	// template using template/html and send, then to use encoding/xml.
-	//
-	// *: https://github.com/golang/go/issues/3133
-	//
-	// TODO: maybe do it properly, even if it's inconvenient?
-
-	_, err = w.Write([]byte(`<?xml version="1.0" encoding="utf-8" standalone="yes"?>`))
-	if err != nil {
-		panic(err.Error())
-	}
-
-	err = templates["feed"].Execute(w, struct {
-		Title    string
-		Torrents []persistence.TorrentMetadata
-	}{
-		Title: title,
-		Torrents: torrents,
-	})
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func staticHandler(w http.ResponseWriter, r *http.Request) {
-	data, err := Asset(r.URL.Path[1:])
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	var contentType string
-	if strings.HasSuffix(r.URL.Path, ".css") {
-		contentType = "text/css; charset=utf-8"
-	} else { // fallback option
-		contentType = http.DetectContentType(data)
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Write(data)
-}
 
 func mustAsset(name string) []byte {
 	data, err := Asset(name)
@@ -286,4 +182,139 @@ func mustAsset(name string) []byte {
 		log.Panicf("Could NOT access the requested resource `%s`: %s (please inform us, this is a BUG!)", name, err.Error())
 	}
 	return data
+}
+
+func parseFlags() error {
+	var cmdFlags struct {
+		Addr     string  `short:"a" long:"addr"        description:"Address (host:port) to serve on"  default:":8080"`
+		Database string  `short:"d" long:"database"    description:"URL of the (magneticod) database"`
+		Cred     string  `short:"c" long:"credentials" description:"Path to the credentials file"`
+		NoAuth   bool    `          long:"no-auth"     description:"Disables authorisation"`
+	}
+
+	if _, err := flags.Parse(&cmdFlags); err != nil {
+		return err
+	}
+
+	if cmdFlags.Cred != "" && cmdFlags.NoAuth {
+		return fmt.Errorf("`credentials` and `no-auth` cannot be supplied together")
+	}
+
+	opts.Addr = cmdFlags.Addr
+
+	if cmdFlags.Database == "" {
+		opts.Database = "sqlite3://" + path.Join(
+			appdirs.UserDataDir("magneticod", "", "", false),
+			"database.sqlite3",
+		)
+	}
+
+	if cmdFlags.Cred == "" && !cmdFlags.NoAuth {
+		opts.CredentialsPath = path.Join(
+			appdirs.UserConfigDir("magneticow", "", "", false),
+			"credentials",
+		)
+	} else {
+		opts.CredentialsPath = cmdFlags.Cred
+	}
+
+	fmt.Printf("%v credpath  %s\n", cmdFlags.NoAuth, opts.CredentialsPath)
+
+	if opts.CredentialsPath != "" {
+		opts.Credentials = make(map[string][]byte)
+		if err := loadCred(opts.CredentialsPath); err != nil {
+			return err
+		}
+	} else {
+		opts.Credentials = nil
+	}
+
+	return nil
+}
+
+func loadCred(cred string) error {
+	file, err := os.Open(cred)
+	if err != nil {
+		return err
+	}
+
+	opts.CredentialsRWMutex.Lock()
+	defer opts.CredentialsRWMutex.Unlock()
+
+	reader := bufio.NewReader(file)
+	for lineno := 1; true; lineno++ {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break;
+			}
+			return fmt.Errorf("error while reading line %d: %s", lineno, err.Error())
+		}
+
+		line = line[:len(line) - 1]  // strip '\n'
+
+		/* The following regex checks if the line satisfies the following conditions:
+		 *
+		 * <USERNAME>:<BCRYPT HASH>
+		 *
+		 * where
+		 *     <USERNAME> must start with a small-case a-z character, might contain non-consecutive
+		 *   underscores in-between, and consists of small-case a-z characters and digits 0-9.
+		 *
+		 *     <BCRYPT HASH> is the output of the well-known bcrypt function.
+		 */
+		re := regexp.MustCompile(`^[a-z](?:_?[a-z0-9])*:\$2[aby]?\$\d{1,2}\$[./A-Za-z0-9]{53}$`)
+		if !re.Match(line) {
+			return fmt.Errorf("on line %d: format should be: <USERNAME>:<BCRYPT HASH>", lineno)
+		}
+
+		tokens := bytes.Split(line, []byte(":"))
+		opts.Credentials[string(tokens[0])] = tokens[1]
+	}
+
+	return nil
+}
+
+// BasicAuth wraps a handler requiring HTTP basic auth for it using the given
+// username and password and the specified realm, which shouldn't contain quotes.
+//
+// Most web browser display a dialog with something like:
+//
+//    The website says: "<realm>"
+//
+// Which is really stupid so you may want to set the realm to a message rather than
+// an actual realm.
+//
+// Source: https://stackoverflow.com/a/39591234/4466589
+func BasicAuth(handler http.HandlerFunc, realm string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username, password, ok := r.BasicAuth()
+		if !ok {  // No credentials provided
+			authenticate(w, realm)
+			return
+		}
+
+		opts.CredentialsRWMutex.RLock()
+		hashedPassword, ok := opts.Credentials[username]
+		opts.CredentialsRWMutex.RUnlock()
+		if !ok {  // User not found
+			authenticate(w, realm)
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)); err != nil {  // Wrong password
+			authenticate(w, realm)
+			return
+		}
+
+		handler(w, r)
+	}
+}
+
+func authenticate(w http.ResponseWriter, realm string) {
+	w.Header().Set("WWW-Authenticate", `Basic realm="`+realm+`"`)
+	w.WriteHeader(401)
+	if _, err := w.Write([]byte("Unauthorised.\n")); err != nil {
+		panic(err.Error())
+	}
 }
