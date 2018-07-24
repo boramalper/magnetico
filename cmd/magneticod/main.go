@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"path"
 	"runtime/pprof"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/boramalper/magnetico/cmd/magneticod/bittorrent"
+	"github.com/boramalper/magnetico/cmd/magneticod/bittorrent/metadata"
 	"github.com/boramalper/magnetico/cmd/magneticod/dht"
 
 	"github.com/Wessie/appdirs"
@@ -75,6 +74,8 @@ func main() {
 
 	zap.ReplaceGlobals(logger)
 
+	zap.L().Debug("debug message!")
+
 	switch opFlags.Profile {
 	case "cpu":
 		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE | os.O_WRONLY, 0755)
@@ -96,19 +97,19 @@ func main() {
 	interruptChan := make(chan os.Signal)
 	signal.Notify(interruptChan, os.Interrupt)
 
-	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, false, logger)
+	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, logger)
 	if err != nil {
 		logger.Sugar().Fatalf("Could not open the database at `%s`: %s", opFlags.DatabaseURL, err.Error())
 	}
 
 	trawlingManager := dht.NewTrawlingManager(opFlags.TrawlerMlAddrs)
-	metadataSink := bittorrent.NewMetadataSink(2 * time.Minute)
+	metadataSink := metadata.NewSink(2 * time.Minute)
 
 	// The Event Loop
 	for stopped := false; !stopped; {
 		select {
 		case result := <-trawlingManager.Output():
-			zap.L().Info("Trawled!", zap.String("infoHash", result.InfoHash.String()))
+			zap.L().Debug("Trawled!", zap.String("infoHash", result.InfoHash.String()))
 			exists, err := database.DoesTorrentExist(result.InfoHash[:])
 			if err != nil {
 				zap.L().Fatal("Could not check whether torrent exists!", zap.Error(err))
@@ -144,10 +145,11 @@ func parseFlags() (*opFlags, error) {
 	}
 
 	if cmdF.DatabaseURL == "" {
-		opF.DatabaseURL = "sqlite3://" + path.Join(
-				appdirs.UserDataDir("magneticod", "", "", false),
-				"database.sqlite3",
-			)
+		opF.DatabaseURL =
+			"sqlite3://" +
+			appdirs.UserDataDir("magneticod", "", "", false) +
+			"/database.sqlite3" +
+			"?_journal_mode=WAL"  // https://github.com/mattn/go-sqlite3#connection-string
 	} else {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}

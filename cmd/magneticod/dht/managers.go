@@ -18,6 +18,7 @@ func NewTrawlingManager(mlAddrs []string) *TrawlingManager {
 	for _, addr := range mlAddrs {
 		manager.services = append(manager.services, mainline.NewTrawlingService(
 			addr,
+			2000,
 			mainline.TrawlingServiceEventHandlers{
 				OnResult: manager.onResult,
 			},

@@ -26,11 +26,12 @@ type ProtocolEventHandlers struct {
 	OnGetPeersResponse           func(*Message, net.Addr)
 	OnFindNodeResponse           func(*Message, net.Addr)
 	OnPingORAnnouncePeerResponse func(*Message, net.Addr)
+	OnCongestion                 func()
 }
 
 func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol) {
 	p = new(Protocol)
-	p.transport = NewTransport(laddr, p.onMessage)
+	p.transport = NewTransport(laddr, p.onMessage, p.eventHandlers.OnCongestion)
 	p.eventHandlers = eventHandlers
 
 	p.currentTokenSecret, p.previousTokenSecret = make([]byte, 20), make([]byte, 20)

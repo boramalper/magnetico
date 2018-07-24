@@ -14,6 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// Close your rows lest you get "database table is locked" error(s)!
+// See https://github.com/mattn/go-sqlite3/issues/2741
+
 type sqlite3Database struct {
 	conn *sql.DB
 }
@@ -55,15 +58,12 @@ func (db *sqlite3Database) DoesTorrentExist(infoHash []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	defer rows.Close()
 
 	// If rows.Next() returns true, meaning that the torrent is in the database, return true; else
 	// return false.
 	exists := rows.Next()
-	if !exists && rows.Err() != nil {
-		return false, err
-	}
-
-	if err = rows.Close(); err != nil {
+	if rows.Err() != nil {
 		return false, err
 	}
 
@@ -143,6 +143,7 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer rows.Close()
 
 	if rows.Next() != true {
 		fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`")
@@ -150,10 +151,6 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 
 	var n uint
 	if err = rows.Scan(&n); err != nil {
-		return 0, err
-	}
-
-	if err = rows.Close(); err != nil {
 		return 0, err
 	}
 
@@ -247,6 +244,7 @@ func (db *sqlite3Database) QueryTorrents(
 	queryArgs = append(queryArgs, limit)
 
 	rows, err := db.conn.Query(sqlQuery, queryArgs...)
+	defer rows.Close()
 	if err != nil {
 		return nil, fmt.Errorf("error while querying torrents: %s", err.Error())
 	}
@@ -267,10 +265,6 @@ func (db *sqlite3Database) QueryTorrents(
 			return nil, err
 		}
 		torrents = append(torrents, torrent)
-	}
-
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 
 	return torrents, nil
@@ -307,6 +301,7 @@ func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 		WHERE info_hash = ?`,
 		infoHash,
 	)
+	defer rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -320,10 +315,6 @@ func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 		return nil, err
 	}
 
-	if err = rows.Close(); err != nil {
-		return nil, err
-	}
-
 	return &tm, nil
 }
 
@@ -331,6 +322,7 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 	rows, err := db.conn.Query(
 		"SELECT size, path FROM files, torrents WHERE files.torrent_id = torrents.id AND torrents.info_hash = ?;",
 		infoHash)
+	defer rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -342,10 +334,6 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 			return nil, err
 		}
 		files = append(files, file)
-	}
-
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 
 	return files, nil
@@ -391,6 +379,7 @@ func (db *sqlite3Database) GetStatistics(from string, n uint) (*Statistics, erro
 			GROUP BY dt;`,
 			timef),
 		fromTime.Unix(), toTime.Unix())
+	defer rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -478,17 +467,13 @@ func (db *sqlite3Database) setupDatabase() error {
 	if err != nil {
 		return fmt.Errorf("sql.Tx.Query (user_version): %s", err.Error())
 	}
+	defer rows.Close()
 	var userVersion int
 	if rows.Next() != true {
 		return fmt.Errorf("sql.Rows.Next (user_version): PRAGMA user_version did not return any rows!")
 	}
 	if err = rows.Scan(&userVersion); err != nil {
 		return fmt.Errorf("sql.Rows.Scan (user_version): %s", err.Error())
-	}
-	// Close your rows lest you get "database table is locked" error(s)!
-	// See https://github.com/mattn/go-sqlite3/issues/2741
-	if err = rows.Close(); err != nil {
-		return fmt.Errorf("sql.Rows.Close (user_version): %s", err.Error())
 	}
 
 	switch userVersion {

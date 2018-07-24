@@ -1,4 +1,4 @@
-package bittorrent
+package metadata
 
 import (
 	"bytes"

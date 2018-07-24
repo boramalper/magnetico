@@ -1,4 +1,4 @@
-package bittorrent
+package metadata
 
 import (
 	"crypto/rand"
@@ -24,21 +24,17 @@ type Metadata struct {
 	Files []persistence.File
 }
 
-type Peer struct {
-	Addr *net.TCPAddr
-}
-
-type MetadataSink struct {
-	clientID    []byte
-	deadline    time.Duration
-	drain       chan Metadata
+type Sink struct {
+	clientID           []byte
+	deadline           time.Duration
+	drain              chan Metadata
 	incomingInfoHashes map[[20]byte]struct{}
-	terminated  bool
-	termination chan interface{}
+	terminated         bool
+	termination        chan interface{}
 }
 
-func NewMetadataSink(deadline time.Duration) *MetadataSink {
-	ms := new(MetadataSink)
+func NewSink(deadline time.Duration) *Sink {
+	ms := new(Sink)
 
 	ms.clientID = make([]byte, 20)
 	_, err := rand.Read(ms.clientID)
@@ -52,27 +48,29 @@ func NewMetadataSink(deadline time.Duration) *MetadataSink {
 	return ms
 }
 
-func (ms *MetadataSink) Sink(res mainline.TrawlingResult) {
+func (ms *Sink) Sink(res mainline.TrawlingResult) {
 	if ms.terminated {
-		zap.L().Panic("Trying to Sink() an already closed MetadataSink!")
+		zap.L().Panic("Trying to Sink() an already closed Sink!")
 	}
 
 	if _, exists := ms.incomingInfoHashes[res.InfoHash]; exists {
 		return
 	}
 	// BEWARE!
-	// Although not crucial, the assumption is that MetadataSink.Sink() will be called by only one
+	// Although not crucial, the assumption is that Sink.Sink() will be called by only one
 	// goroutine (i.e. it's not thread-safe), lest there might be a race condition between where we
 	// check whether res.infoHash exists in the ms.incomingInfoHashes, and where we add the infoHash
 	// to the incomingInfoHashes at the end of this function.
 
+	zap.L().Info("Sunk!", zap.String("infoHash", res.InfoHash.String()))
+
 	IPs := res.PeerIP.String()
 	var rhostport string
 	if IPs == "<nil>" {
-		zap.L().Debug("MetadataSink.Sink: Peer IP is nil!")
+		zap.L().Debug("Sink.Sink: Peer IP is nil!")
 		return
 	} else if IPs[0] == '?' {
-		zap.L().Debug("MetadataSink.Sink: Peer IP is invalid!")
+		zap.L().Debug("Sink.Sink: Peer IP is invalid!")
 		return
 	} else if strings.ContainsRune(IPs, ':') { // IPv6
 		rhostport = fmt.Sprintf("[%s]:%d", IPs, res.PeerPort)
@@ -82,29 +80,33 @@ func (ms *MetadataSink) Sink(res mainline.TrawlingResult) {
 
 	raddr, err := net.ResolveTCPAddr("tcp", rhostport)
 	if err != nil {
-		zap.L().Debug("MetadataSink.Sink: Couldn't resolve peer address!", zap.Error(err))
+		zap.L().Debug("Sink.Sink: Couldn't resolve peer address!", zap.Error(err))
 		return
 	}
 
-	go ms.awaitMetadata(res.InfoHash, Peer{Addr: raddr})
+	leech := NewLeech(res.InfoHash, raddr, LeechEventHandlers{
+		OnSuccess: ms.flush,
+		OnError: ms.onLeechError,
+	})
+	go leech.Do(time.Now().Add(ms.deadline))
 
 	ms.incomingInfoHashes[res.InfoHash] = struct{}{}
 }
 
-func (ms *MetadataSink) Drain() <-chan Metadata {
+func (ms *Sink) Drain() <-chan Metadata {
 	if ms.terminated {
-		zap.L().Panic("Trying to Drain() an already closed MetadataSink!")
+		zap.L().Panic("Trying to Drain() an already closed Sink!")
 	}
 	return ms.drain
 }
 
-func (ms *MetadataSink) Terminate() {
+func (ms *Sink) Terminate() {
 	ms.terminated = true
 	close(ms.termination)
 	close(ms.drain)
 }
 
-func (ms *MetadataSink) flush(result Metadata) {
+func (ms *Sink) flush(result Metadata) {
 	if !ms.terminated {
 		ms.drain <- result
 		// Delete the infoHash from ms.incomingInfoHashes ONLY AFTER once we've flushed the
@@ -113,4 +115,9 @@ func (ms *MetadataSink) flush(result Metadata) {
 		copy(infoHash[:], result.InfoHash)
 		delete(ms.incomingInfoHashes, infoHash)
 	}
+}
+
+func (ms *Sink) onLeechError(infoHash [20]byte, err error) {
+	zap.L().Debug("leech error", zap.ByteString("infoHash", infoHash[:]), zap.Error(err))
+	delete(ms.incomingInfoHashes, infoHash)
 }

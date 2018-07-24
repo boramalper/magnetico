@@ -31,13 +31,14 @@ type TrawlingService struct {
 	//                                                                  ^~~~~~
 	routingTable      map[string]net.Addr
 	routingTableMutex *sync.Mutex
+	maxNeighbors      uint
 }
 
 type TrawlingServiceEventHandlers struct {
 	OnResult func(TrawlingResult)
 }
 
-func NewTrawlingService(laddr string, eventHandlers TrawlingServiceEventHandlers) *TrawlingService {
+func NewTrawlingService(laddr string, initialMaxNeighbors uint, eventHandlers TrawlingServiceEventHandlers) *TrawlingService {
 	service := new(TrawlingService)
 	service.protocol = NewProtocol(
 		laddr,
@@ -45,12 +46,14 @@ func NewTrawlingService(laddr string, eventHandlers TrawlingServiceEventHandlers
 			OnGetPeersQuery:     service.onGetPeersQuery,
 			OnAnnouncePeerQuery: service.onAnnouncePeerQuery,
 			OnFindNodeResponse:  service.onFindNodeResponse,
+			OnCongestion:        service.onCongestion,
 		},
 	)
 	service.trueNodeID = make([]byte, 20)
 	service.routingTable = make(map[string]net.Addr)
 	service.routingTableMutex = new(sync.Mutex)
 	service.eventHandlers = eventHandlers
+	service.maxNeighbors = initialMaxNeighbors
 
 	_, err := rand.Read(service.trueNodeID)
 	if err != nil {
@@ -78,11 +81,14 @@ func (s *TrawlingService) Terminate() {
 
 func (s *TrawlingService) trawl() {
 	for range time.Tick(3 * time.Second) {
+		s.maxNeighbors = uint(float32(s.maxNeighbors) * 1.01)
+
 		s.routingTableMutex.Lock()
 		if len(s.routingTable) == 0 {
 			s.bootstrap()
 		} else {
-			zap.L().Debug("Latest status:", zap.Int("n", len(s.routingTable)))
+			zap.L().Warn("Latest status:", zap.Int("n", len(s.routingTable)),
+				zap.Uint("maxNeighbors", s.maxNeighbors))
 			s.findNeighbors()
 			s.routingTable = make(map[string]net.Addr)
 		}
@@ -185,11 +191,34 @@ func (s *TrawlingService) onFindNodeResponse(response *Message, addr net.Addr) {
 	s.routingTableMutex.Lock()
 	defer s.routingTableMutex.Unlock()
 
+	zap.L().Debug("find node response!!", zap.Uint("maxNeighbors", s.maxNeighbors),
+		zap.Int("response.R.Nodes length", len(response.R.Nodes)))
+
 	for _, node := range response.R.Nodes {
-		if node.Addr.Port != 0 { // Ignore nodes who "use" port 0.
-			if len(s.routingTable) < 8000 {
-				s.routingTable[string(node.ID)] = &node.Addr
-			}
+		if uint(len(s.routingTable)) >= s.maxNeighbors {
+			break
 		}
+		if node.Addr.Port == 0 { // Ignore nodes who "use" port 0.
+			zap.L().Debug("ignoring 0 port!!!")
+			continue
+		}
+
+		s.routingTable[string(node.ID)] = &node.Addr
 	}
+}
+
+func (s *TrawlingService) onCongestion() {
+	/* The Congestion Prevention Strategy:
+	 *
+	 * In case of congestion, decrease the maximum number of nodes to the 90% of the current value.
+	 */
+	 if s.maxNeighbors < 200 {
+		 zap.L().Warn("Max. number of neighbours are < 200 and there is still congestion!" +
+		 	"(check your network connection if this message recurs)")
+		 return
+	 }
+
+	 s.maxNeighbors = uint(float32(s.maxNeighbors) * 0.9)
+	 zap.L().Debug("Max. number of neighbours updated!",
+	 	zap.Uint("s.maxNeighbors", s.maxNeighbors))
 }
