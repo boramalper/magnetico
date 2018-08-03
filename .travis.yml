@@ -45,6 +45,14 @@ script:
   - "go vet github.com/boramalper/magnetico/pkg/persistence/..."
 
   # Formatting Errors
-  - "gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticod/"
-  - "gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticow/"
-  - "gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/pkg/persistence/"
+  #
+  # Since gofmt returns zero even if there are files to be formatted, we use:
+  #
+  #   ! gofmt -d ${GOPATH}/path/ 2>&1 | read
+  #
+  # to return 1 if there are files to be formatted, and 0 if not.
+  #
+  # https://groups.google.com/forum/#!topic/Golang-Nuts/pdrN4zleUio
+  - "! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticod/ 2>&1 | read"
+  - "! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticow/ 2>&1 | read"
+  - "! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/pkg/persistence/ 2>&1 | read"
