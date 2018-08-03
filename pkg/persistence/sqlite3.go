@@ -147,7 +147,7 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 	defer rows.Close()
 
 	if rows.Next() != true {
-		fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`")
+		return 0, fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`")
 	}
 
 	var n uint
@@ -174,7 +174,7 @@ func (db *sqlite3Database) QueryTorrents(
 		return nil, fmt.Errorf("lastOrderedValue and lastID should be supplied together, if supplied")
 	}
 
-	doJoin    := query != ""
+	doJoin := query != ""
 	firstPage := lastID == nil
 
 	// executeTemplate is used to prepare the SQL query, WITH PLACEHOLDERS FOR USER INPUT.
@@ -206,14 +206,14 @@ func (db *sqlite3Database) QueryTorrents(
 		ORDER BY {{.OrderOn}} {{AscOrDesc .Ascending}}, id {{AscOrDesc .Ascending}}
 		LIMIT ?;	
 	`, struct {
-		DoJoin bool
+		DoJoin    bool
 		FirstPage bool
-		OrderOn string
+		OrderOn   string
 		Ascending bool
 	}{
-		DoJoin: doJoin,
+		DoJoin:    doJoin,
 		FirstPage: firstPage,
-		OrderOn: orderOn(orderBy),
+		OrderOn:   orderOn(orderBy),
 		Ascending: ascending,
 	}, template.FuncMap{
 		"GTEorLTE": func(ascending bool) string {
@@ -347,24 +347,24 @@ func (db *sqlite3Database) GetStatistics(from string, n uint) (*Statistics, erro
 	}
 
 	var toTime time.Time
-	var timef  string  // time format: https://www.sqlite.org/lang_datefunc.html
+	var timef string // time format: https://www.sqlite.org/lang_datefunc.html
 
 	switch gran {
 	case Year:
 		toTime = fromTime.AddDate(int(n), 0, 0)
-		timef  = "%Y"
+		timef = "%Y"
 	case Month:
 		toTime = fromTime.AddDate(0, int(n), 0)
-		timef  = "%Y-%m"
+		timef = "%Y-%m"
 	case Week:
-		toTime = fromTime.AddDate(0, 0, int(n) * 7)
-		timef  = "%Y-%W"
+		toTime = fromTime.AddDate(0, 0, int(n)*7)
+		timef = "%Y-%W"
 	case Day:
 		toTime = fromTime.AddDate(0, 0, int(n))
-		timef  = "%Y-%m-%d"
+		timef = "%Y-%m-%d"
 	case Hour:
 		toTime = fromTime.Add(time.Duration(n) * time.Hour)
-		timef  = "%Y-%m-%dT%H"
+		timef = "%Y-%m-%dT%H"
 	}
 
 	// TODO: make it faster!
@@ -378,7 +378,7 @@ func (db *sqlite3Database) GetStatistics(from string, n uint) (*Statistics, erro
                   AND discovered_on >= ?
                   AND discovered_on <= ?
 			GROUP BY dt;`,
-			timef),
+		timef),
 		fromTime.Unix(), toTime.Unix())
 	defer rows.Close()
 	if err != nil {
@@ -478,7 +478,7 @@ func (db *sqlite3Database) setupDatabase() error {
 	}
 
 	switch userVersion {
-	case 0:  // FROZEN.
+	case 0: // FROZEN.
 		// Upgrade from user_version 0 to 1
 		// Changes:
 		//   * `info_hash_index` is recreated as UNIQUE.
@@ -493,7 +493,7 @@ func (db *sqlite3Database) setupDatabase() error {
 		}
 		fallthrough
 
-	case 1:  // FROZEN.
+	case 1: // FROZEN.
 		// Upgrade from user_version 1 to 2
 		// Changes:
 		//   * Added `n_seeders`, `n_leechers`, and `updated_on` columns to the `torrents` table, and
@@ -538,7 +538,7 @@ func (db *sqlite3Database) setupDatabase() error {
 		}
 		fallthrough
 
-	case 2:  // NOT FROZEN! (subject to change or complete removal)
+	case 2: // NOT FROZEN! (subject to change or complete removal)
 		// Upgrade from user_version 2 to 3
 		// Changes:
 		//   * Created `torrents_idx` FTS5 virtual table.

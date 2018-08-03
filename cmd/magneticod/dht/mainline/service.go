@@ -113,7 +113,7 @@ func (s *TrawlingService) bootstrap() {
 		if err != nil {
 			zap.L().Error("Could NOT resolve (UDP) address of the bootstrapping node!",
 				zap.String("node", node))
-			continue;
+			continue
 		}
 
 		s.protocol.SendMessage(NewFindNodeQuery(s.trueNodeID, target), addr)
@@ -208,11 +208,11 @@ func (s *TrawlingService) onCongestion() {
 	 *
 	 * In case of congestion, decrease the maximum number of nodes to the 90% of the current value.
 	 */
-	 if s.maxNeighbors < 200 {
-		 zap.L().Warn("Max. number of neighbours are < 200 and there is still congestion!" +
-		 	"(check your network connection if this message recurs)")
-		 return
-	 }
+	if s.maxNeighbors < 200 {
+		zap.L().Warn("Max. number of neighbours are < 200 and there is still congestion!" +
+			"(check your network connection if this message recurs)")
+		return
+	}
 
-	 s.maxNeighbors = uint(float32(s.maxNeighbors) * 0.9)
+	s.maxNeighbors = uint(float32(s.maxNeighbors) * 0.9)
 }

@@ -221,9 +221,8 @@ func (p *Protocol) CalculateToken(address net.IP) []byte {
 func (p *Protocol) VerifyToken(address net.IP, token []byte) bool {
 	p.tokenLock.Lock()
 	defer p.tokenLock.Unlock()
+	// TODO: implement VerifyToken()
 	panic("VerifyToken() not implemented yet!")
-	// TODO
-	return false
 }
 
 func (p *Protocol) updateTokenSecret() {

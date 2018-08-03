@@ -37,7 +37,7 @@ type opFlags struct {
 	TrawlerMlInterval time.Duration
 
 	Verbosity int
-	Profile string
+	Profile   string
 }
 
 func main() {
@@ -76,7 +76,7 @@ func main() {
 
 	switch opFlags.Profile {
 	case "cpu":
-		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE | os.O_WRONLY, 0755)
+		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE|os.O_WRONLY, 0755)
 		if err != nil {
 			zap.L().Panic("Could not open the cpu profile file!", zap.Error(err))
 		}
@@ -145,9 +145,9 @@ func parseFlags() (*opFlags, error) {
 	if cmdF.DatabaseURL == "" {
 		opF.DatabaseURL =
 			"sqlite3://" +
-			appdirs.UserDataDir("magneticod", "", "", false) +
-			"/database.sqlite3" +
-			"?_journal_mode=WAL"  // https://github.com/mattn/go-sqlite3#connection-string
+				appdirs.UserDataDir("magneticod", "", "", false) +
+				"/database.sqlite3" +
+				"?_journal_mode=WAL" // https://github.com/mattn/go-sqlite3#connection-string
 	} else {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}

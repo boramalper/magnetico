@@ -64,7 +64,7 @@ func (ms *Sink) Sink(res mainline.TrawlingResult) {
 
 	leech := NewLeech(res.InfoHash, res.PeerAddr, LeechEventHandlers{
 		OnSuccess: ms.flush,
-		OnError: ms.onLeechError,
+		OnError:   ms.onLeechError,
 	})
 	go leech.Do(time.Now().Add(ms.deadline))
 

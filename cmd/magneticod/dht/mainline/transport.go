@@ -36,8 +36,8 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 	 *
 	 * https://en.wikipedia.org/wiki/User_Datagram_Protocol
 	 */
-	t.buffer       = make([]byte, 65507)
-	t.onMessage    = onMessage
+	t.buffer = make([]byte, 65507)
+	t.onMessage = onMessage
 	t.onCongestion = onCongestion
 
 	var err error
@@ -83,7 +83,7 @@ func (t *Transport) Start() {
 }
 
 func (t *Transport) Terminate() {
-	unix.Close(t.fd);
+	unix.Close(t.fd)
 }
 
 // readMessages is a goroutine!
@@ -131,7 +131,7 @@ func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 	if addrSA == nil {
 		zap.L().Debug("Wrong net address for the remote peer!",
 			zap.String("addr", addr.String()))
-		return;
+		return
 	}
 
 	err = unix.Sendto(t.fd, data, 0, addrSA)

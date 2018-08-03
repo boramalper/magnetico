@@ -37,12 +37,12 @@ type extDict struct {
 }
 
 type Leech struct {
-	infoHash                       [20]byte
-	peerAddr                       *net.TCPAddr
-	ev                             LeechEventHandlers
+	infoHash [20]byte
+	peerAddr *net.TCPAddr
+	ev       LeechEventHandlers
 
-	conn                           *net.TCPConn
-	clientID                       [20]byte
+	conn     *net.TCPConn
+	clientID [20]byte
 
 	ut_metadata                    uint8
 	metadataReceived, metadataSize uint
@@ -50,8 +50,8 @@ type Leech struct {
 }
 
 type LeechEventHandlers struct {
-	OnSuccess func(Metadata)         // must be supplied. args: metadata
-	OnError   func([20]byte, error)  // must be supplied. args: infohash, error
+	OnSuccess func(Metadata)        // must be supplied. args: metadata
+	OnError   func([20]byte, error) // must be supplied. args: infohash, error
 }
 
 func NewLeech(infoHash [20]byte, peerAddr *net.TCPAddr, ev LeechEventHandlers) *Leech {
@@ -86,7 +86,9 @@ func (l *Leech) doBtHandshake() error {
 	))
 
 	// ASSERTION
-	if len(lHandshake) != 68 { panic(fmt.Sprintf("len(lHandshake) == %d", len(lHandshake))) }
+	if len(lHandshake) != 68 {
+		panic(fmt.Sprintf("len(lHandshake) == %d", len(lHandshake)))
+	}
 
 	err := l.writeAll(lHandshake)
 	if err != nil {
@@ -148,15 +150,15 @@ func (l *Leech) doExHandshake() error {
 }
 
 func (l *Leech) requestAllPieces() error {
-	/*
-     * reqq
-	 *   An integer, the number of outstanding request messages this client supports without
-	 *   dropping any. The default in in libtorrent is 250.
-	 * "handshake message" @ "Extension Protocol" @ http://www.bittorrent.org/beps/bep_0010.html
-	 *
-	 * TODO: maybe by requesting all pieces at once we are exceeding this limit? maybe we should
-	 *       request as we receive pieces?
-	 */
+	// reqq
+	//   An integer, the number of outstanding request messages this client supports without
+	//   dropping any. The default in in libtorrent is 250.
+	//
+	// "handshake message" @ "Extension Protocol" @ http://www.bittorrent.org/beps/bep_0010.html
+	//
+	// TODO: maybe by requesting all pieces at once we are exceeding this limit? maybe we should
+	//       request as we receive pieces?
+
 	// Request all the pieces of metadata
 	nPieces := int(math.Ceil(float64(l.metadataSize) / math.Pow(2, 14)))
 	for piece := 0; piece < nPieces; piece++ {
@@ -166,13 +168,13 @@ func (l *Leech) requestAllPieces() error {
 			MsgType: 0,
 			Piece:   piece,
 		})
-		if err != nil {  // ASSERT
+		if err != nil { // ASSERT
 			panic(errors.Wrap(err, "marshal extDict"))
 		}
 
 		err = l.writeAll([]byte(fmt.Sprintf(
 			"%s\x14%s%s",
-			toBigEndian(uint(2 + len(extDictDump)), 4),
+			toBigEndian(uint(2+len(extDictDump)), 4),
 			toBigEndian(uint(l.ut_metadata), 1),
 			extDictDump,
 		)))
@@ -213,7 +215,7 @@ func (l *Leech) readExMessage() ([]byte, error) {
 
 		// Every extension message has at least 2 bytes.
 		if len(rMessage) < 2 {
-			continue;
+			continue
 		}
 
 		// We are interested only in extension messages, whose first byte is always 20
@@ -343,7 +345,7 @@ func (l *Leech) Do(deadline time.Time) {
 			l.OnError(fmt.Errorf("remote peer rejected sending metadata"))
 			return
 		}
-		
+
 		if rExtDict.MsgType == 1 { // data
 			// Get the unread bytes!
 			metadataPiece := rMessageBuf.Bytes()
@@ -358,12 +360,12 @@ func (l *Leech) Do(deadline time.Time) {
 				l.OnError(fmt.Errorf("metadataPiece > 16kiB"))
 				return
 			}
-			
+
 			piece := rExtDict.Piece
 			// metadata[piece * 2**14: piece * 2**14 + len(metadataPiece)] = metadataPiece is how it'd be done in Python
 			copy(l.metadata[piece*int(math.Pow(2, 14)):piece*int(math.Pow(2, 14))+len(metadataPiece)], metadataPiece)
 			l.metadataReceived += uint(len(metadataPiece))
-			
+
 			// ... if the length of @metadataPiece is less than 16kiB AND metadata is NOT
 			// complete then we err.
 			if len(metadataPiece) < 16*1024 && l.metadataReceived != l.metadataSize {
@@ -377,14 +379,14 @@ func (l *Leech) Do(deadline time.Time) {
 			}
 		}
 	}
-	
+
 	// Verify the checksum
 	sha1Sum := sha1.Sum(l.metadata)
 	if !bytes.Equal(sha1Sum[:], l.infoHash[:]) {
 		l.OnError(fmt.Errorf("infohash mismatch"))
 		return
 	}
-	
+
 	// Check the info dictionary
 	info := new(metainfo.Info)
 	err = bencode.Unmarshal(l.metadata, info)
@@ -420,7 +422,7 @@ func (l *Leech) Do(deadline time.Time) {
 			l.OnError(fmt.Errorf("file size less than zero"))
 			return
 		}
-		
+
 		totalSize += uint64(file.Size)
 	}
 
@@ -483,4 +485,3 @@ func toBigEndian(i uint, n int) []byte {
 
 	return b
 }
-

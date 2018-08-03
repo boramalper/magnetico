@@ -42,6 +42,7 @@ type Database interface {
 }
 
 type OrderingCriteria uint8
+
 const (
 	ByRelevance OrderingCriteria = iota
 	ByTotalSize
@@ -51,17 +52,19 @@ const (
 	ByNLeechers
 	ByUpdatedOn
 )
+
 // TODO: search `swtich (orderBy)` and see if all cases are covered all the time
 
 type databaseEngine uint8
+
 const (
 	Sqlite3 databaseEngine = 1
 )
 
 type Statistics struct {
-	NDiscovered map[string]uint64    `json:"nDiscovered"`
-	NFiles      map[string]uint64  `json:"nFiles"`
-	TotalSize   map[string]uint64  `json:"totalSize"`
+	NDiscovered map[string]uint64 `json:"nDiscovered"`
+	NFiles      map[string]uint64 `json:"nFiles"`
+	TotalSize   map[string]uint64 `json:"totalSize"`
 
 	// All these slices below have the exact length equal to the Period.
 	//NDiscovered []uint64  `json:"nDiscovered"`
@@ -69,18 +72,18 @@ type Statistics struct {
 }
 
 type File struct {
-	Size int64   `json:"size"`
-	Path string  `json:"path"`
+	Size int64  `json:"size"`
+	Path string `json:"path"`
 }
 
 type TorrentMetadata struct {
-	ID           uint64   `json:"id"`
-	InfoHash     []byte   `json:"infoHash"`  // marshalled differently
-	Name         string   `json:"name"`
-	Size         uint64   `json:"size"`
-	DiscoveredOn int64    `json:"discoveredOn"`
-	NFiles       uint     `json:"nFiles"`
-	Relevance    float64  `json:"relevance"`
+	ID           uint64  `json:"id"`
+	InfoHash     []byte  `json:"infoHash"` // marshalled differently
+	Name         string  `json:"name"`
+	Size         uint64  `json:"size"`
+	DiscoveredOn int64   `json:"discoveredOn"`
+	NFiles       uint    `json:"nFiles"`
+	Relevance    float64 `json:"relevance"`
 }
 
 func (tm *TorrentMetadata) MarshalJSON() ([]byte, error) {
@@ -122,7 +125,7 @@ func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 func NewStatistics() (s *Statistics) {
 	s = new(Statistics)
 	s.NDiscovered = make(map[string]uint64)
-	s.NFiles      = make(map[string]uint64)
-	s.TotalSize   = make(map[string]uint64)
+	s.NFiles = make(map[string]uint64)
+	s.TotalSize = make(map[string]uint64)
 	return
 }

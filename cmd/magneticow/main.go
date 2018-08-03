@@ -38,10 +38,10 @@ var decoder = schema.NewDecoder()
 var templates map[string]*template.Template
 var database persistence.Database
 
-var opts struct{
+var opts struct {
 	Addr               string
 	Database           string
-	Credentials        map[string][]byte  // TODO: encapsulate credentials and mutex for safety
+	Credentials        map[string][]byte // TODO: encapsulate credentials and mutex for safety
 	CredentialsRWMutex sync.RWMutex
 	CredentialsPath    string
 }
@@ -77,9 +77,9 @@ func main() {
 				continue
 			}
 
-			opts.Credentials = make(map[string][]byte)  // Clear opts.Credentials
+			opts.Credentials = make(map[string][]byte) // Clear opts.Credentials
 			opts.CredentialsRWMutex.Unlock()
-			if err := loadCred(opts.CredentialsPath); err != nil {  // Reload credentials
+			if err := loadCred(opts.CredentialsPath); err != nil { // Reload credentials
 				zap.L().Warn("couldn't load credentials", zap.Error(err))
 			}
 		}
@@ -175,7 +175,6 @@ func respondError(w http.ResponseWriter, statusCode int, format string, a ...int
 	w.Write([]byte(fmt.Sprintf(format, a...)))
 }
 
-
 func mustAsset(name string) []byte {
 	data, err := Asset(name)
 	if err != nil {
@@ -186,10 +185,10 @@ func mustAsset(name string) []byte {
 
 func parseFlags() error {
 	var cmdFlags struct {
-		Addr     string  `short:"a" long:"addr"        description:"Address (host:port) to serve on"  default:":8080"`
-		Database string  `short:"d" long:"database"    description:"URL of the (magneticod) database"`
-		Cred     string  `short:"c" long:"credentials" description:"Path to the credentials file"`
-		NoAuth   bool    `          long:"no-auth"     description:"Disables authorisation"`
+		Addr     string `short:"a" long:"addr"        description:"Address (host:port) to serve on"  default:":8080"`
+		Database string `short:"d" long:"database"    description:"URL of the (magneticod) database"`
+		Cred     string `short:"c" long:"credentials" description:"Path to the credentials file"`
+		NoAuth   bool   `          long:"no-auth"     description:"Disables authorisation"`
 	}
 
 	if _, err := flags.Parse(&cmdFlags); err != nil {
@@ -205,9 +204,9 @@ func parseFlags() error {
 	if cmdFlags.Database == "" {
 		opts.Database =
 			"sqlite3://" +
-			appdirs.UserDataDir("magneticod", "", "", false) +
-			"/database.sqlite3" +
-			"?_journal_mode=WAL"  // https://github.com/mattn/go-sqlite3#connection-string
+				appdirs.UserDataDir("magneticod", "", "", false) +
+				"/database.sqlite3" +
+				"?_journal_mode=WAL" // https://github.com/mattn/go-sqlite3#connection-string
 	} else {
 		opts.Database = cmdFlags.Database
 	}
@@ -249,12 +248,12 @@ func loadCred(cred string) error {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
-				break;
+				break
 			}
 			return fmt.Errorf("error while reading line %d: %s", lineno, err.Error())
 		}
 
-		line = line[:len(line) - 1]  // strip '\n'
+		line = line[:len(line)-1] // strip '\n'
 
 		/* The following regex checks if the line satisfies the following conditions:
 		 *
@@ -292,7 +291,7 @@ func loadCred(cred string) error {
 func BasicAuth(handler http.HandlerFunc, realm string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
-		if !ok {  // No credentials provided
+		if !ok { // No credentials provided
 			authenticate(w, realm)
 			return
 		}
@@ -300,12 +299,12 @@ func BasicAuth(handler http.HandlerFunc, realm string) http.HandlerFunc {
 		opts.CredentialsRWMutex.RLock()
 		hashedPassword, ok := opts.Credentials[username]
 		opts.CredentialsRWMutex.RUnlock()
-		if !ok {  // User not found
+		if !ok { // User not found
 			authenticate(w, realm)
 			return
 		}
 
-		if err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)); err != nil {  // Wrong password
+		if err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)); err != nil { // Wrong password
 			authenticate(w, realm)
 			return
 		}

@@ -7,13 +7,14 @@ import (
 	"time"
 )
 
-var yearRE  = regexp.MustCompile(`^(\d{4})$`)
+var yearRE = regexp.MustCompile(`^(\d{4})$`)
 var monthRE = regexp.MustCompile(`^(\d{4})-(\d{2})$`)
-var weekRE  = regexp.MustCompile(`^(\d{4})-W(\d{2})$`)
-var dayRE   = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})$`)
-var hourRE  = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})T(\d{2})$`)
+var weekRE = regexp.MustCompile(`^(\d{4})-W(\d{2})$`)
+var dayRE = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})$`)
+var hourRE = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})T(\d{2})$`)
 
 type Granularity int
+
 const (
 	Year Granularity = iota
 	Month
@@ -50,7 +51,7 @@ func ParseISO8601(s string) (*time.Time, Granularity, error) {
 		if err != nil {
 			return nil, -1, err
 		}
-		t := time.Date(year, time.January, week * 7, 23, 59, 59, 0, time.UTC)
+		t := time.Date(year, time.January, week*7, 23, 59, 59, 0, time.UTC)
 		return &t, Week, nil
 	}
 
@@ -122,15 +123,15 @@ func daysOfMonth(month time.Month, year int) int {
 }
 
 func isLeap(year int) bool {
-	 if year % 4 != 0 {
-	 	return false
-	 } else if year % 100 != 0 {
-	 	return true
-	 } else if year % 400 != 0 {
-	 	return false
-	 } else {
-	 	return true
-	 }
+	if year%4 != 0 {
+		return false
+	} else if year%100 != 0 {
+		return true
+	} else if year%400 != 0 {
+		return false
+	} else {
+		return true
+	}
 }
 
 func atoi(s string) int {
@@ -153,7 +154,7 @@ func parseYear(s string) (int, error) {
 
 func parseMonth(s string) (time.Month, error) {
 	month := atoi(s)
-	if month <= 0  || month >= 13 {
+	if month <= 0 || month >= 13 {
 		return time.Month(-1), fmt.Errorf("month is not in range [01, 12]")
 	}
 	return time.Month(month), nil

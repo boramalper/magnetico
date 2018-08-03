@@ -10,7 +10,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-
 // DONE
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	nTorrents, err := database.GetNumberOfTorrents()
@@ -128,7 +127,7 @@ func feedHandler(w http.ResponseWriter, r *http.Request) {
 		Title    string
 		Torrents []persistence.TorrentMetadata
 	}{
-		Title: title,
+		Title:    title,
 		Torrents: torrents,
 	})
 	if err != nil {

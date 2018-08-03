@@ -16,9 +16,8 @@ import (
 func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 	// @lastOrderedValue AND @lastID are either both supplied or neither of them should be supplied
 	// at all; and if that is NOT the case, then return an error.
-	if q := r.URL.Query(); !(
-		(q.Get("lastOrderedValue") != "" && q.Get("lastID") != "") ||
-			(q.Get("lastOrderedValue") == "" && q.Get("lastID") == "")) {
+	if q := r.URL.Query(); !((q.Get("lastOrderedValue") != "" && q.Get("lastID") != "") ||
+		(q.Get("lastOrderedValue") == "" && q.Get("lastID") == "")) {
 		respondError(w, 400, "`lastOrderedValue`, `lastID` must be supplied altogether, if supplied.")
 		return
 	}
@@ -43,7 +42,7 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if tq.Epoch == nil {
 		tq.Epoch = new(int64)
-		*tq.Epoch = time.Now().Unix()  // epoch, if not supplied, is NOW.
+		*tq.Epoch = time.Now().Unix() // epoch, if not supplied, is NOW.
 	} else if *tq.Epoch <= 0 {
 		respondError(w, 400, "epoch must be greater than 0")
 		return
