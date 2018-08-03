@@ -150,15 +150,6 @@ func (l *Leech) doExHandshake() error {
 }
 
 func (l *Leech) requestAllPieces() error {
-	// reqq
-	//   An integer, the number of outstanding request messages this client supports without
-	//   dropping any. The default in in libtorrent is 250.
-	//
-	// "handshake message" @ "Extension Protocol" @ http://www.bittorrent.org/beps/bep_0010.html
-	//
-	// TODO: maybe by requesting all pieces at once we are exceeding this limit? maybe we should
-	//       request as we receive pieces?
-
 	// Request all the pieces of metadata
 	nPieces := int(math.Ceil(float64(l.metadataSize) / math.Pow(2, 14)))
 	for piece := 0; piece < nPieces; piece++ {
@@ -318,7 +309,7 @@ func (l *Leech) Do(deadline time.Time) {
 		l.OnError(errors.Wrap(err, "doExHandshake"))
 		return
 	}
-
+	
 	err = l.requestAllPieces()
 	if err != nil {
 		l.OnError(errors.Wrap(err, "requestAllPieces"))
