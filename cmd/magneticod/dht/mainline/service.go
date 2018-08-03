@@ -1,21 +1,17 @@
 package mainline
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/metainfo"
 	"go.uber.org/zap"
 )
 
 type TrawlingResult struct {
-	InfoHash metainfo.Hash
-	Peer     torrent.Peer
-	PeerIP   net.IP
-	PeerPort int
+	InfoHash [20]byte
+	PeerAddr *net.TCPAddr
 }
 
 type TrawlingService struct {
@@ -29,7 +25,7 @@ type TrawlingService struct {
 	// understandably) slices cannot be used as keys (since they are not hashable), and using arrays
 	// (or even the conversion between each other) is a pain; hence map[string]net.UDPAddr
 	//                                                                  ^~~~~~
-	routingTable      map[string]net.Addr
+	routingTable      map[string]*net.UDPAddr
 	routingTableMutex *sync.Mutex
 	maxNeighbors      uint
 }
@@ -50,7 +46,7 @@ func NewTrawlingService(laddr string, initialMaxNeighbors uint, eventHandlers Tr
 		},
 	)
 	service.trueNodeID = make([]byte, 20)
-	service.routingTable = make(map[string]net.Addr)
+	service.routingTable = make(map[string]*net.UDPAddr)
 	service.routingTableMutex = new(sync.Mutex)
 	service.eventHandlers = eventHandlers
 	service.maxNeighbors = initialMaxNeighbors
@@ -80,8 +76,11 @@ func (s *TrawlingService) Terminate() {
 }
 
 func (s *TrawlingService) trawl() {
-	for range time.Tick(3 * time.Second) {
-		s.maxNeighbors = uint(float32(s.maxNeighbors) * 1.01)
+	for range time.Tick(1 * time.Second) {
+		// TODO
+		// For some reason, we can't still detect congestion and this keeps increasing...
+		// Disable for now.
+		// s.maxNeighbors = uint(float32(s.maxNeighbors) * 1.001)
 
 		s.routingTableMutex.Lock()
 		if len(s.routingTable) == 0 {
@@ -90,7 +89,7 @@ func (s *TrawlingService) trawl() {
 			zap.L().Warn("Latest status:", zap.Int("n", len(s.routingTable)),
 				zap.Uint("maxNeighbors", s.maxNeighbors))
 			s.findNeighbors()
-			s.routingTable = make(map[string]net.Addr)
+			s.routingTable = make(map[string]*net.UDPAddr)
 		}
 		s.routingTableMutex.Unlock()
 	}
@@ -114,6 +113,7 @@ func (s *TrawlingService) bootstrap() {
 		if err != nil {
 			zap.L().Error("Could NOT resolve (UDP) address of the bootstrapping node!",
 				zap.String("node", node))
+			continue;
 		}
 
 		s.protocol.SendMessage(NewFindNodeQuery(s.trueNodeID, target), addr)
@@ -135,7 +135,7 @@ func (s *TrawlingService) findNeighbors() {
 	}
 }
 
-func (s *TrawlingService) onGetPeersQuery(query *Message, addr net.Addr) {
+func (s *TrawlingService) onGetPeersQuery(query *Message, addr *net.UDPAddr) {
 	s.protocol.SendMessage(
 		NewGetPeersResponseWithNodes(
 			query.T,
@@ -147,35 +147,35 @@ func (s *TrawlingService) onGetPeersQuery(query *Message, addr net.Addr) {
 	)
 }
 
-func (s *TrawlingService) onAnnouncePeerQuery(query *Message, addr net.Addr) {
+func (s *TrawlingService) onAnnouncePeerQuery(query *Message, addr *net.UDPAddr) {
+	/* BEP 5
+	 *
+	 * There is an optional argument called implied_port which value is either 0 or 1. If it is
+	 * present and non-zero, the port argument should be ignored and the source port of the UDP
+	 * packet should be used as the peer's port instead. This is useful for peers behind a NAT that
+	 * may not know their external port, and supporting uTP, they accept incoming connections on the
+	 * same port as the DHT port.
+	 */
 	var peerPort int
 	if query.A.ImpliedPort != 0 {
-		peerPort = addr.(*net.UDPAddr).Port
+		// TODO: Peer uses uTP, ignore for now
+		// return
+		peerPort = addr.Port
 	} else {
 		peerPort = query.A.Port
+		// return
 	}
 
 	// TODO: It looks ugly, am I doing it right?  --Bora
 	// (Converting slices to arrays in Go shouldn't have been such a pain...)
-	var peerId, infoHash [20]byte
-	copy(peerId[:], []byte("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"))
+	var infoHash [20]byte
 	copy(infoHash[:], query.A.InfoHash)
 	s.eventHandlers.OnResult(TrawlingResult{
 		InfoHash: infoHash,
-		Peer: torrent.Peer{
-			// As we don't know the ID of the remote peer, set it empty.
-			Id:   peerId,
-			IP:   addr.(*net.UDPAddr).IP,
+		PeerAddr: &net.TCPAddr{
+			IP:   addr.IP,
 			Port: peerPort,
-			// "Ha" indicates that we discovered the peer through DHT Announce Peer (query); not
-			// sure how anacrolix/torrent utilizes that information though.
-			Source: "Ha",
-			// We don't know whether the remote peer supports encryption either, but let's pretend
-			// that it doesn't.
-			SupportsEncryption: false,
 		},
-		PeerIP:   addr.(*net.UDPAddr).IP,
-		PeerPort: peerPort,
 	})
 
 	s.protocol.SendMessage(
@@ -187,19 +187,15 @@ func (s *TrawlingService) onAnnouncePeerQuery(query *Message, addr net.Addr) {
 	)
 }
 
-func (s *TrawlingService) onFindNodeResponse(response *Message, addr net.Addr) {
+func (s *TrawlingService) onFindNodeResponse(response *Message, addr *net.UDPAddr) {
 	s.routingTableMutex.Lock()
 	defer s.routingTableMutex.Unlock()
-
-	zap.L().Debug("find node response!!", zap.Uint("maxNeighbors", s.maxNeighbors),
-		zap.Int("response.R.Nodes length", len(response.R.Nodes)))
 
 	for _, node := range response.R.Nodes {
 		if uint(len(s.routingTable)) >= s.maxNeighbors {
 			break
 		}
 		if node.Addr.Port == 0 { // Ignore nodes who "use" port 0.
-			zap.L().Debug("ignoring 0 port!!!")
 			continue
 		}
 
@@ -219,6 +215,4 @@ func (s *TrawlingService) onCongestion() {
 	 }
 
 	 s.maxNeighbors = uint(float32(s.maxNeighbors) * 0.9)
-	 zap.L().Debug("Max. number of neighbours updated!",
-	 	zap.Uint("s.maxNeighbors", s.maxNeighbors))
 }

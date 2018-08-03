@@ -32,7 +32,7 @@ func TestParseISO8601(t *testing.T) {
 	for i, date := range validDates {
 		_, gr, err := ParseISO8601(date.date)
 		if err != nil {
-			t.Errorf("Error while parsing valid date #%d", i+1, err)
+			t.Errorf("Error while parsing valid date #%d: %s", i+1, err.Error())
 			continue
 		}
 

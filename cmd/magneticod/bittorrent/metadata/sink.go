@@ -2,11 +2,9 @@ package metadata
 
 import (
 	"crypto/rand"
-	"fmt"
-	"net"
-	"strings"
 	"time"
 
+	"github.com/boramalper/magnetico/pkg/util"
 	"go.uber.org/zap"
 
 	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
@@ -62,29 +60,9 @@ func (ms *Sink) Sink(res mainline.TrawlingResult) {
 	// check whether res.infoHash exists in the ms.incomingInfoHashes, and where we add the infoHash
 	// to the incomingInfoHashes at the end of this function.
 
-	zap.L().Info("Sunk!", zap.String("infoHash", res.InfoHash.String()))
+	zap.L().Info("Sunk!", zap.Int("leeches", len(ms.incomingInfoHashes)), util.HexField("infoHash", res.InfoHash[:]))
 
-	IPs := res.PeerIP.String()
-	var rhostport string
-	if IPs == "<nil>" {
-		zap.L().Debug("Sink.Sink: Peer IP is nil!")
-		return
-	} else if IPs[0] == '?' {
-		zap.L().Debug("Sink.Sink: Peer IP is invalid!")
-		return
-	} else if strings.ContainsRune(IPs, ':') { // IPv6
-		rhostport = fmt.Sprintf("[%s]:%d", IPs, res.PeerPort)
-	} else { // IPv4
-		rhostport = fmt.Sprintf("%s:%d", IPs, res.PeerPort)
-	}
-
-	raddr, err := net.ResolveTCPAddr("tcp", rhostport)
-	if err != nil {
-		zap.L().Debug("Sink.Sink: Couldn't resolve peer address!", zap.Error(err))
-		return
-	}
-
-	leech := NewLeech(res.InfoHash, raddr, LeechEventHandlers{
+	leech := NewLeech(res.InfoHash, res.PeerAddr, LeechEventHandlers{
 		OnSuccess: ms.flush,
 		OnError: ms.onLeechError,
 	})
@@ -118,6 +96,6 @@ func (ms *Sink) flush(result Metadata) {
 }
 
 func (ms *Sink) onLeechError(infoHash [20]byte, err error) {
-	zap.L().Debug("leech error", zap.ByteString("infoHash", infoHash[:]), zap.Error(err))
+	zap.L().Debug("leech error", util.HexField("infoHash", infoHash[:]), zap.Error(err))
 	delete(ms.incomingInfoHashes, infoHash)
 }

@@ -109,13 +109,13 @@ func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 		return makeSqlite3Database(url_)
 
 	case "postgresql":
-		return nil, fmt.Errorf("postgresql is not yet supported!")
+		return nil, fmt.Errorf("postgresql is not yet supported")
 
 	case "mysql":
-		return nil, fmt.Errorf("mysql is not yet supported!")
+		return nil, fmt.Errorf("mysql is not yet supported")
 
 	default:
-		return nil, fmt.Errorf("unknown URI scheme (database engine)!")
+		return nil, fmt.Errorf("unknown URI scheme: `%s`", url_.Scheme)
 	}
 }
 

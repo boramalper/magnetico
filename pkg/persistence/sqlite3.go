@@ -30,7 +30,8 @@ func makeSqlite3Database(url_ *url.URL) (Database, error) {
 	}
 
 	var err error
-	db.conn, err = sql.Open("sqlite3", url_.Path)
+	url_.Scheme = ""
+	db.conn, err = sql.Open("sqlite3", url_.String())
 	if err != nil {
 		return nil, fmt.Errorf("sql.Open: %s", err.Error())
 	}

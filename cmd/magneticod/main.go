@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -9,6 +8,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/boramalper/magnetico/pkg/util"
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -74,8 +74,6 @@ func main() {
 
 	zap.ReplaceGlobals(logger)
 
-	zap.L().Debug("debug message!")
-
 	switch opFlags.Profile {
 	case "cpu":
 		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE | os.O_WRONLY, 0755)
@@ -109,7 +107,7 @@ func main() {
 	for stopped := false; !stopped; {
 		select {
 		case result := <-trawlingManager.Output():
-			zap.L().Debug("Trawled!", zap.String("infoHash", result.InfoHash.String()))
+			zap.L().Debug("Trawled!", util.HexField("infoHash", result.InfoHash[:]))
 			exists, err := database.DoesTorrentExist(result.InfoHash[:])
 			if err != nil {
 				zap.L().Fatal("Could not check whether torrent exists!", zap.Error(err))
@@ -117,12 +115,12 @@ func main() {
 				metadataSink.Sink(result)
 			}
 
-		case metadata := <-metadataSink.Drain():
-			if err := database.AddNewTorrent(metadata.InfoHash, metadata.Name, metadata.Files); err != nil {
+		case md := <-metadataSink.Drain():
+			if err := database.AddNewTorrent(md.InfoHash, md.Name, md.Files); err != nil {
 				logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s",
-					metadata.InfoHash, err.Error())
+					md.InfoHash, err.Error())
 			}
-			zap.L().Info("Fetched!", zap.String("name", metadata.Name), zap.String("infoHash", hex.EncodeToString(metadata.InfoHash)))
+			zap.L().Info("Fetched!", zap.String("name", md.Name), util.HexField("infoHash", md.InfoHash))
 
 		case <-interruptChan:
 			trawlingManager.Terminate()

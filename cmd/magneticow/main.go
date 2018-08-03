@@ -162,7 +162,7 @@ func main() {
 	decoder.IgnoreUnknownKeys(false)
 	decoder.ZeroEmpty(true)
 
-	zap.L().Info("magneticow is ready to serve!")
+	zap.S().Infof("magneticow is ready to serve on %s!", opts.Addr)
 	err = http.ListenAndServe(opts.Addr, router)
 	if err != nil {
 		zap.L().Error("ListenAndServe error", zap.Error(err))
@@ -203,10 +203,13 @@ func parseFlags() error {
 	opts.Addr = cmdFlags.Addr
 
 	if cmdFlags.Database == "" {
-		opts.Database = "sqlite3://" + path.Join(
-			appdirs.UserDataDir("magneticod", "", "", false),
-			"database.sqlite3",
-		)
+		opts.Database =
+			"sqlite3://" +
+			appdirs.UserDataDir("magneticod", "", "", false) +
+			"/database.sqlite3" +
+			"?_journal_mode=WAL"  // https://github.com/mattn/go-sqlite3#connection-string
+	} else {
+		opts.Database = cmdFlags.Database
 	}
 
 	if cmdFlags.Cred == "" && !cmdFlags.NoAuth {

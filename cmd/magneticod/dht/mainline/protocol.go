@@ -19,13 +19,13 @@ type Protocol struct {
 }
 
 type ProtocolEventHandlers struct {
-	OnPingQuery                  func(*Message, net.Addr)
-	OnFindNodeQuery              func(*Message, net.Addr)
-	OnGetPeersQuery              func(*Message, net.Addr)
-	OnAnnouncePeerQuery          func(*Message, net.Addr)
-	OnGetPeersResponse           func(*Message, net.Addr)
-	OnFindNodeResponse           func(*Message, net.Addr)
-	OnPingORAnnouncePeerResponse func(*Message, net.Addr)
+	OnPingQuery                  func(*Message, *net.UDPAddr)
+	OnFindNodeQuery              func(*Message, *net.UDPAddr)
+	OnGetPeersQuery              func(*Message, *net.UDPAddr)
+	OnAnnouncePeerQuery          func(*Message, *net.UDPAddr)
+	OnGetPeersResponse           func(*Message, *net.UDPAddr)
+	OnFindNodeResponse           func(*Message, *net.UDPAddr)
+	OnPingORAnnouncePeerResponse func(*Message, *net.UDPAddr)
 	OnCongestion                 func()
 }
 
@@ -58,13 +58,13 @@ func (p *Protocol) Terminate() {
 	p.transport.Terminate()
 }
 
-func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
+func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
 	switch msg.Y {
 	case "q":
 		switch msg.Q {
 		case "ping":
 			if !validatePingQueryMessage(msg) {
-				zap.L().Debug("An invalid ping query received!")
+				// zap.L().Debug("An invalid ping query received!")
 				return
 			}
 			// Check whether there is a registered event handler for the ping queries, before
@@ -75,7 +75,7 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 
 		case "find_node":
 			if !validateFindNodeQueryMessage(msg) {
-				zap.L().Debug("An invalid find_node query received!")
+				// zap.L().Debug("An invalid find_node query received!")
 				return
 			}
 			if p.eventHandlers.OnFindNodeQuery != nil {
@@ -84,7 +84,7 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 
 		case "get_peers":
 			if !validateGetPeersQueryMessage(msg) {
-				zap.L().Debug("An invalid get_peers query received!")
+				// zap.L().Debug("An invalid get_peers query received!")
 				return
 			}
 			if p.eventHandlers.OnGetPeersQuery != nil {
@@ -93,7 +93,7 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 
 		case "announce_peer":
 			if !validateAnnouncePeerQueryMessage(msg) {
-				zap.L().Debug("An invalid announce_peer query received!")
+				// zap.L().Debug("An invalid announce_peer query received!")
 				return
 			}
 			if p.eventHandlers.OnAnnouncePeerQuery != nil {
@@ -104,15 +104,14 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 			// Although we are aware that such method exists, we ignore.
 
 		default:
-			zap.L().Debug("A KRPC query of an unknown method received!",
-				zap.String("method", msg.Q))
+			// zap.L().Debug("A KRPC query of an unknown method received!", zap.String("method", msg.Q))
 			return
 		}
 	case "r":
 		// get_peers > find_node > ping / announce_peer
 		if len(msg.R.Token) != 0 { // The message should be a get_peers response.
 			if !validateGetPeersResponseMessage(msg) {
-				zap.L().Debug("An invalid get_peers response received!")
+				// zap.L().Debug("An invalid get_peers response received!")
 				return
 			}
 			if p.eventHandlers.OnGetPeersResponse != nil {
@@ -120,7 +119,7 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 			}
 		} else if len(msg.R.Nodes) != 0 { // The message should be a find_node response.
 			if !validateFindNodeResponseMessage(msg) {
-				zap.L().Debug("An invalid find_node response received!")
+				// zap.L().Debug("An invalid find_node response received!")
 				return
 			}
 			if p.eventHandlers.OnFindNodeResponse != nil {
@@ -128,7 +127,7 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 			}
 		} else { // The message should be a ping or an announce_peer response.
 			if !validatePingORannouncePeerResponseMessage(msg) {
-				zap.L().Debug("An invalid ping OR announce_peer response received!")
+				// zap.L().Debug("An invalid ping OR announce_peer response received!")
 				return
 			}
 			if p.eventHandlers.OnPingORAnnouncePeerResponse != nil {
@@ -147,7 +146,7 @@ func (p *Protocol) onMessage(msg *Message, addr net.Addr) {
 	}
 }
 
-func (p *Protocol) SendMessage(msg *Message, addr net.Addr) {
+func (p *Protocol) SendMessage(msg *Message, addr *net.UDPAddr) {
 	p.transport.WriteMessages(msg, addr)
 }
 

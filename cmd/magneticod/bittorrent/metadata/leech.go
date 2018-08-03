@@ -81,20 +81,17 @@ func (l *Leech) writeAll(b []byte) error {
 func (l *Leech) doBtHandshake() error {
 	lHandshake := []byte(fmt.Sprintf(
 		"\x13BitTorrent protocol\x00\x00\x00\x00\x00\x10\x00\x01%s%s",
-		l.infoHash[:],
+		l.infoHash,
 		l.clientID,
 	))
 
 	// ASSERTION
 	if len(lHandshake) != 68 { panic(fmt.Sprintf("len(lHandshake) == %d", len(lHandshake))) }
 
-
 	err := l.writeAll(lHandshake)
 	if err != nil {
 		return errors.Wrap(err, "writeAll lHandshake")
 	}
-
-	zap.L().Debug("BitTorrent handshake sent, waiting for the remote's...")
 
 	rHandshake, err := l.readExactly(68)
 	if err != nil {
@@ -151,6 +148,15 @@ func (l *Leech) doExHandshake() error {
 }
 
 func (l *Leech) requestAllPieces() error {
+	/*
+     * reqq
+	 *   An integer, the number of outstanding request messages this client supports without
+	 *   dropping any. The default in in libtorrent is 250.
+	 * "handshake message" @ "Extension Protocol" @ http://www.bittorrent.org/beps/bep_0010.html
+	 *
+	 * TODO: maybe by requesting all pieces at once we are exceeding this limit? maybe we should
+	 *       request as we receive pieces?
+	 */
 	// Request all the pieces of metadata
 	nPieces := int(math.Ceil(float64(l.metadataSize) / math.Pow(2, 14)))
 	for piece := 0; piece < nPieces; piece++ {
@@ -205,6 +211,11 @@ func (l *Leech) readExMessage() ([]byte, error) {
 			return nil, errors.Wrap(err, "readMessage")
 		}
 
+		// Every extension message has at least 2 bytes.
+		if len(rMessage) < 2 {
+			continue;
+		}
+
 		// We are interested only in extension messages, whose first byte is always 20
 		if rMessage[0] == 20 {
 			return rMessage, nil
@@ -232,19 +243,50 @@ func (l *Leech) readUmMessage() ([]byte, error) {
 func (l *Leech) connect(deadline time.Time) error {
 	var err error
 
-	l.conn, err = net.DialTCP("tcp", nil, l.peerAddr)
+	l.conn, err = net.DialTCP("tcp4", nil, l.peerAddr)
 	if err != nil {
 		return errors.Wrap(err, "dial")
 	}
-	defer l.conn.Close()
+
+	// > If sec == 0, operating system discards any unsent or unacknowledged data [after Close()
+	// > has been called].
+	err = l.conn.SetLinger(0)
+	if err != nil {
+		if err := l.conn.Close(); err != nil {
+			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
+		}
+		return errors.Wrap(err, "SetLinger")
+	}
+
+	err = l.conn.SetKeepAlive(true)
+	if err != nil {
+		if err := l.conn.Close(); err != nil {
+			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
+		}
+		return errors.Wrap(err, "SetKeepAlive")
+	}
+
+	err = l.conn.SetKeepAlivePeriod(10 * time.Second)
+	if err != nil {
+		if err := l.conn.Close(); err != nil {
+			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
+		}
+		return errors.Wrap(err, "SetKeepAlivePeriod")
+	}
 
 	err = l.conn.SetNoDelay(true)
 	if err != nil {
+		if err := l.conn.Close(); err != nil {
+			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
+		}
 		return errors.Wrap(err, "NODELAY")
 	}
 
 	err = l.conn.SetDeadline(deadline)
 	if err != nil {
+		if err := l.conn.Close(); err != nil {
+			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
+		}
 		return errors.Wrap(err, "SetDeadline")
 	}
 
@@ -257,6 +299,11 @@ func (l *Leech) Do(deadline time.Time) {
 		l.OnError(errors.Wrap(err, "connect"))
 		return
 	}
+	defer func() {
+		if err := l.conn.Close(); err != nil {
+			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
+		}
+	}()
 
 	err = l.doBtHandshake()
 	if err != nil {

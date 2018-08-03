@@ -18,12 +18,12 @@ type Transport struct {
 	// OnMessage is the function that will be called when Transport receives a packet that is
 	// successfully unmarshalled as a syntactically correct Message (but -of course- the checking
 	// the semantic correctness of the Message is left to Protocol).
-	onMessage func(*Message, net.Addr)
+	onMessage func(*Message, *net.UDPAddr)
 	// OnCongestion
 	onCongestion func()
 }
 
-func NewTransport(laddr string, onMessage func(*Message, net.Addr), onCongestion func()) *Transport {
+func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onCongestion func()) *Transport {
 	t := new(Transport)
 	/*   The field size sets a theoretical limit of 65,535 bytes (8 byte header + 65,527 bytes of
 	 * data) for a UDP datagram. However the actual limit for the data length, which is imposed by
@@ -95,39 +95,44 @@ func (t *Transport) readMessages() {
 			t.onCongestion()
 		} else if err != nil {
 			// TODO: isn't there a more reliable way to detect if UDPConn is closed?
-			zap.L().Debug("Could NOT read an UDP packet!", zap.Error(err))
+			zap.L().Warn("Could NOT read an UDP packet!", zap.Error(err))
 		}
 
 		if n == 0 {
 			/*   Datagram sockets in various domains  (e.g., the UNIX and Internet domains) permit
 			 * zero-length datagrams. When such a datagram is received, the return value (n) is 0.
 			 */
-			zap.L().Debug("zero-length received!!")
 			continue
 		}
 
 		from := sockaddr.SockaddrToUDPAddr(fromSA)
+		if from == nil {
+			zap.L().Panic("dht mainline transport SockaddrToUDPAddr: nil")
+		}
 
 		var msg Message
 		err = bencode.Unmarshal(t.buffer[:n], &msg)
 		if err != nil {
-			zap.L().Debug("Could NOT unmarshal packet data!", zap.Error(err))
+			// couldn't unmarshal packet data
+			continue
 		}
 
-		zap.L().Debug("message read! (first 20...)", zap.ByteString("msg", t.buffer[:20]))
 		t.onMessage(&msg, from)
 	}
 }
 
-func (t *Transport) WriteMessages(msg *Message, addr net.Addr) {
+func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 	data, err := bencode.Marshal(msg)
 	if err != nil {
 		zap.L().Panic("Could NOT marshal an outgoing message! (Programmer error.)")
 	}
 
 	addrSA := sockaddr.NetAddrToSockaddr(addr)
-
-	zap.L().Debug("sent message!!!")
+	if addrSA == nil {
+		zap.L().Debug("Wrong net address for the remote peer!",
+			zap.String("addr", addr.String()))
+		return;
+	}
 
 	err = unix.Sendto(t.fd, data, 0, addrSA)
 	if err == unix.EPERM || err == unix.ENOBUFS {
@@ -148,6 +153,6 @@ func (t *Transport) WriteMessages(msg *Message, addr net.Addr) {
 		zap.L().Warn("WRITE CONGESTION!", zap.Error(err))
 		t.onCongestion()
 	} else if err != nil {
-		zap.L().Debug("Could NOT write an UDP packet!", zap.Error(err))
+		zap.L().Warn("Could NOT write an UDP packet!", zap.Error(err))
 	}
 }
