@@ -1,22 +1,41 @@
-sudo: enabled
-dist: xenial
+# https://gist.github.com/y0ssar1an/df2dab474520c4086926f672c52db139
+
+# This is a weird way of telling Travis to use the fast container-based test
+# runner instead of the slow VM-based runner.
+sudo: false
+
 language: go
 go:
-  - 1.8.3
+  - "1.10"
+
+# Only clone the most recent commit.
+git:
+  depth: 1
+
+env:
+  - DEP_VERSION="0.5.0"
 
 before_install:
-  - "sudo apt-get update -qq"
-  - "sudo apt-get install python3-dev"
-  - "pip3 install mypy pylint"
-
-  - ""
+  # Download the binary to bin folder in $GOPATH
+  - curl -L -s https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64 -o $GOPATH/bin/dep
+  # Make the binary executable
+  - chmod +x $GOPATH/bin/dep
 
 install:
-  - "pip3 install ./magneticod"
-  - "pip3 install ./magneticow"
+  - dep ensure
 
 script:
-  - "pylint ./magneticod/magneticod"
-  - "pylint ./magneticow/magneticow"
-  - "mypy --ignore-missing-imports --follow-imports=skip ./magneticod/magneticod"
-  - "mypy --ignore-missing-imports --follow-imports=skip ./magneticow/magneticow"
+  # The Unit Tests
+  - "go test github.com/boramalper/magnetico/cmd/magneticod/..."
+  - "go test github.com/boramalper/magnetico/cmd/magneticow/..."
+  - "go test github.com/boramalper/magnetico/pkg/persistence/..."
+
+  # Static Analysis (vet)
+  - "go vet github.com/boramalper/magnetico/cmd/magneticod/..."
+  - "go vet github.com/boramalper/magnetico/cmd/magneticow/..."
+  - "go vet github.com/boramalper/magnetico/pkg/persistence/..."
+
+  # Formatting Errors
+  - "gofmt -l labs/GOPATH/src/github.com/boramalper/magnetico/cmd/magneticod/"
+  - "gofmt -l labs/GOPATH/src/github.com/boramalper/magnetico/cmd/magneticow/"
+  - "gofmt -l labs/GOPATH/src/github.com/boramalper/magnetico/pkg/persistence/"
