@@ -22,7 +22,14 @@ before_install:
   - chmod +x $GOPATH/bin/dep
 
 install:
-  - dep ensure
+  - "go get -u github.com/jteeuwen/go-bindata/..."
+  - "dep ensure"
+
+before_script:
+  - "go-bindata
+       -o=\"GOPATH/src/github.com/boramalper/magnetico/cmd/magneticow/bindata.go\"
+       -prefix=\"GOPATH/src/github.com/boramalper/magnetico/cmd/magneticow/data/\"
+       GOPATH/src/github.com/boramalper/magnetico/cmd/magneticow/data/..."
 
 script:
   # The Unit Tests
@@ -36,6 +43,6 @@ script:
   - "go vet github.com/boramalper/magnetico/pkg/persistence/..."
 
   # Formatting Errors
-  - "gofmt -l labs/GOPATH/src/github.com/boramalper/magnetico/cmd/magneticod/"
-  - "gofmt -l labs/GOPATH/src/github.com/boramalper/magnetico/cmd/magneticow/"
-  - "gofmt -l labs/GOPATH/src/github.com/boramalper/magnetico/pkg/persistence/"
+  - "gofmt -l GOPATH/src/github.com/boramalper/magnetico/cmd/magneticod/"
+  - "gofmt -l GOPATH/src/github.com/boramalper/magnetico/cmd/magneticow/"
+  - "gofmt -l GOPATH/src/github.com/boramalper/magnetico/pkg/persistence/"
