@@ -1,8 +1,6 @@
-# https://gist.github.com/y0ssar1an/df2dab474520c4086926f672c52db139
-
-# This is a weird way of telling Travis to use the fast container-based test
-# runner instead of the slow VM-based runner.
+# https://docs.travis-ci.com/user/reference/overview/#virtualisation-environment-vs-operating-system
 sudo: false
+dist: trusty
 
 language: go
 go:
