@@ -1,3 +1,5 @@
+.PHONY: test format
+
 all: magneticod magneticow
 
 magneticod:
