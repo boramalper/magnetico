@@ -309,7 +309,7 @@ func (l *Leech) Do(deadline time.Time) {
 		l.OnError(errors.Wrap(err, "doExHandshake"))
 		return
 	}
-	
+
 	err = l.requestAllPieces()
 	if err != nil {
 		l.OnError(errors.Wrap(err, "requestAllPieces"))
