@@ -11,6 +11,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -74,7 +75,7 @@ func (db *sqlite3Database) DoesTorrentExist(infoHash []byte) (bool, error) {
 func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []File) error {
 	tx, err := db.conn.Begin()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "conn.Begin")
 	}
 	// If everything goes as planned and no error occurs, we will commit the transaction before
 	// returning from the function so the tx.Rollback() call will fail, trying to rollback a
@@ -89,7 +90,7 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 
 	// This is a workaround for a bug: the database will not accept total_size to be zero.
 	if totalSize == 0 {
-		return nil
+		return fmt.Errorf("totalSize is zero")
 	}
 
 	// Although we check whether the torrent exists in the database before asking MetadataSink to
@@ -108,12 +109,12 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 		) VALUES (?, ?, ?, ?);
 	`, infoHash, name, totalSize, time.Now().Unix())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "tx.Exec (INSERT OR IGNORE INTO torrents)")
 	}
 
 	var lastInsertId int64
 	if lastInsertId, err = res.LastInsertId(); err != nil {
-		return fmt.Errorf("sql.Result.LastInsertId()!  %s", err.Error())
+		return errors.Wrap(err, "sql.Result.LastInsertId")
 	}
 
 	for _, file := range files {
@@ -121,13 +122,13 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 			lastInsertId, file.Size, file.Path,
 		)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "tx.Exec (INSERT INTO files)")
 		}
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "tx.Commit")
 	}
 
 	return nil
@@ -150,12 +151,17 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 		return 0, fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`")
 	}
 
-	var n uint
+	var n *uint
 	if err = rows.Scan(&n); err != nil {
 		return 0, err
 	}
 
-	return n, nil
+	// If the database is empty (i.e. 0 entries in 'torrents') then the query will return nil.
+	if n == nil {
+		return 0, nil
+	} else {
+		return *n, nil
+	}
 }
 
 func (db *sqlite3Database) QueryTorrents(
@@ -568,7 +574,11 @@ func (db *sqlite3Database) setupDatabase() error {
 			END;
 
             -- Add column modified_on
-			ALTER TABLE torrents ADD COLUMN modified_on INTEGER;
+			ALTER TABLE torrents
+				ADD COLUMN modified_on INTEGER NOT NULL
+				CHECK (modified_on >= discovered_on AND (updated_on IS NOT NULL OR modified_on >= updated_on))
+				DEFAULT (-1)
+			;
 			UPDATE torrents SET modified_on = (SELECT discovered_on);
 			CREATE INDEX modified_on_index ON torrents (modified_on);
 
