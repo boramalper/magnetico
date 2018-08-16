@@ -9,7 +9,7 @@ import (
 	"path"
 	"text/template"
 	"time"
-
+	
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -45,7 +45,7 @@ func makeSqlite3Database(url_ *url.URL) (Database, error) {
 	}
 
 	if err := db.setupDatabase(); err != nil {
-		return nil, fmt.Errorf("setupDatabase: %s", err.Error())
+		return nil, errors.Wrap(err, "setupDatabase")
 	}
 
 	return db, nil
@@ -90,18 +90,49 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 
 	// This is a workaround for a bug: the database will not accept total_size to be zero.
 	if totalSize == 0 {
-		return fmt.Errorf("totalSize is zero")
+		zap.L().Debug("Ignoring a torrent whose total size is zero.")
+		return nil
 	}
 
 	// Although we check whether the torrent exists in the database before asking MetadataSink to
-	// fetch its metadata, the torrent can also exists in the Sink before that. Now, if a torrent in
-	// the sink is still being fetched, that's still not a problem as we just add the new peer for
-	// the torrent and exit, but if the torrent is complete (i.e. its metadata) and if its waiting
-	// in the channel to be received, a race condition arises when we query the database and seeing
-	// that it doesn't exists there, add it to the sink.
-	// Hence INSERT OR IGNORE.
+	// fetch its metadata, the torrent can also exists in the Sink before that:
+	//
+	// If the torrent is complete (i.e. its metadata) and if its waiting in the channel to be
+	// received, a race condition arises when we query the database and seeing that it doesn't
+	// exists there, add it to the sink.
+	//
+	// Do NOT try to be clever and attempt to use INSERT OR IGNORE INTO or INSERT OR REPLACE INTO
+	// without understanding their consequences fully:
+	//
+	// https://www.sqlite.org/lang_conflict.html
+	//
+	//   INSERT OR IGNORE INTO
+	//     INSERT OR IGNORE INTO will ignore:
+	//       1. CHECK constraint violations
+	//       2. UNIQUE or PRIMARY KEY constraint violations
+	//       3. NOT NULL constraint violations
+	//
+	//     You would NOT want to ignore #1 and #2 as they are likely to indicate programmer errors.
+	//     Instead of silently ignoring them, let the program err and investigate the causes.
+	//
+	//   INSERT OR REPLACE INTO
+	//     INSERT OR REPLACE INTO will replace on:
+	//       1. UNIQUE or PRIMARY KEY constraint violations (by "deleting pre-existing rows that are
+	//          causing the constraint violation prior to inserting or updating the current row")
+	//
+	//     INSERT OR REPLACE INTO will abort on:
+	//       2. CHECK constraint violations
+	//       3. NOT NULL constraint violations (if "the column has no default value")
+	//
+	//     INSERT OR REPLACE INTO is definitely much closer to what you may want, but deleting
+	//     pre-existing rows means that you might cause users loose data (such as seeder and leecher
+	//     information, readme, and so on) at the expense of /your/ own laziness...
+	if exist, err := db.DoesTorrentExist(infoHash); exist || err != nil {
+		return err
+	}
+
 	res, err := tx.Exec(`
-		INSERT OR IGNORE INTO torrents (
+		INSERT INTO torrents (
 			info_hash,
 			name,
 			total_size,
@@ -109,12 +140,27 @@ func (db *sqlite3Database) AddNewTorrent(infoHash []byte, name string, files []F
 		) VALUES (?, ?, ?, ?);
 	`, infoHash, name, totalSize, time.Now().Unix())
 	if err != nil {
-		return errors.Wrap(err, "tx.Exec (INSERT OR IGNORE INTO torrents)")
+		return errors.Wrap(err, "tx.Exec (INSERT OR REPLACE INTO torrents)")
 	}
 
 	var lastInsertId int64
 	if lastInsertId, err = res.LastInsertId(); err != nil {
 		return errors.Wrap(err, "sql.Result.LastInsertId")
+	}
+
+	// > last_insert_rowid()
+	// >   The last_insert_rowid() function returns the ROWID of the last row insert from the
+	// >   database connection which invoked the function. If no successful INSERTs into rowid
+	// >   tables have ever occurred on the database connection, then last_insert_rowid() returns
+	// >   zero.
+	// https://www.sqlite.org/lang_corefunc.html#last_insert_rowid
+	// https://www.sqlite.org/c3ref/last_insert_rowid.html
+	//
+	// Now, last_insert_rowid() should never return zero (or any negative values really) as we
+	// insert into torrents and handle any errors accordingly right afterwards.
+	if lastInsertId <= 0 {
+		zap.L().Panic("last_insert_rowid() <= 0 (this should have never happened!)",
+			zap.Int64("lastInsertId", lastInsertId))
 	}
 
 	for _, file := range files {
@@ -553,39 +599,53 @@ func (db *sqlite3Database) setupDatabase() error {
 		//     * https://sqlite.org/fts5.html
 		//     * https://sqlite.org/fts3.html
 		//
-		//   * Added `n_files` column to the `torrents` table.
+		//   * Added `modified_on` column to the `torrents` table.
 		zap.L().Warn("Updating database schema from 2 to 3... (this might take a while)")
 		_, err = tx.Exec(`
-			CREATE VIRTUAL TABLE IF NOT EXISTS torrents_idx USING fts5(name, content='torrents', content_rowid='id', tokenize="porter unicode61 separators ' !""#$%&''()*+,-./:;<=>?@[\]^_` + "`" + `{|}~'");
+			CREATE VIRTUAL TABLE torrents_idx USING fts5(name, content='torrents', content_rowid='id', tokenize="porter unicode61 separators ' !""#$%&''()*+,-./:;<=>?@[\]^_` + "`" + `{|}~'");
 			
 			-- Populate the index
 			INSERT INTO torrents_idx(rowid, name) SELECT id, name FROM torrents;
 
 			-- Triggers to keep the FTS index up to date.
-			CREATE TRIGGER torrents_ai AFTER INSERT ON torrents BEGIN
+			CREATE TRIGGER torrents_idx_ai_t AFTER INSERT ON torrents BEGIN
 			  INSERT INTO torrents_idx(rowid, name) VALUES (new.id, new.name);
 			END;
-			CREATE TRIGGER torrents_ad AFTER DELETE ON torrents BEGIN
+			CREATE TRIGGER torrents_idx_ad_t AFTER DELETE ON torrents BEGIN
 			  INSERT INTO torrents_idx(torrents_idx, rowid, name) VALUES('delete', old.id, old.name);
 			END;
-			CREATE TRIGGER torrents_au AFTER UPDATE ON torrents BEGIN
+			CREATE TRIGGER torrents_idx_au_t AFTER UPDATE ON torrents BEGIN
 			  INSERT INTO torrents_idx(torrents_idx, rowid, name) VALUES('delete', old.id, old.name);
 			  INSERT INTO torrents_idx(rowid, name) VALUES (new.id, new.name);
 			END;
 
-            -- Add column modified_on
-			ALTER TABLE torrents
-				ADD COLUMN modified_on INTEGER NOT NULL
+            -- Add column 'modified_on'
+			-- BEWARE: code needs to be updated before January 1, 3000 (32503680000)!
+			ALTER TABLE torrents ADD COLUMN modified_on INTEGER NOT NULL
 				CHECK (modified_on >= discovered_on AND (updated_on IS NOT NULL OR modified_on >= updated_on))
-				DEFAULT (-1)
+				DEFAULT 32503680000
 			;
-			UPDATE torrents SET modified_on = (SELECT discovered_on);
+
+			-- If 'modified_on' is not explicitly supplied, then it shall be set, by default, to
+			-- 'discovered_on' right after the row is inserted to 'torrents'.
+            --
+			-- {WHEN expr} does NOT work for some reason (trigger doesn't get triggered), so we use
+            --   AND NEW."modified_on" = 32503680000
+            -- instead in the WHERE clause.
+			CREATE TRIGGER "torrents_modified_on_default_t" AFTER INSERT ON "torrents" BEGIN
+	          UPDATE "torrents" SET "modified_on" = NEW."discovered_on" WHERE "id" = NEW."id" AND NEW."modified_on" = 32503680000;
+            END;
+
+			-- Set 'modified_on' value of all rows to 'discovered_on' or 'updated_on', whichever is
+            -- greater; beware that 'updated_on' can be NULL too.			
+			UPDATE torrents SET modified_on = (SELECT MAX(discovered_on, IFNULL(updated_on, 0)));
+
 			CREATE INDEX modified_on_index ON torrents (modified_on);
 
 			PRAGMA user_version = 3;
 		`)
 		if err != nil {
-			return fmt.Errorf("sql.Tx.Exec (v2 -> v3): %s", err.Error())
+			return errors.Wrap(err, "sql.Tx.Exec (v2 -> v3)")
 		}
 	}
 
