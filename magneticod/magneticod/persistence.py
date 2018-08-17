@@ -111,10 +111,16 @@ class Database:
     def __commit_metadata(self) -> None:
         cur = self.__db_conn.cursor()
         cur.execute("BEGIN;")
+
+        # Ignore insertions into files table if there is no corresponding row
+        # in the torrents table (which might be the case as we use INSERT OR
+        # IGNORE into)
+        cur.execute("CREATE TEMPORARY TRIGGER torrent_id_not_null BEFORE INSERT ON main.files WHEN NEW.'torrent_id' IS NULL BEGIN SELECT RAISE(IGNORE); END;")
+
         # noinspection PyBroadException
         try:
             cur.executemany(
-                "INSERT INTO torrents (info_hash, name, total_size, discovered_on) VALUES (?, ?, ?, ?);",
+                "INSERT OR IGNORE INTO torrents (info_hash, name, total_size, discovered_on) VALUES (?, ?, ?, ?);",
                 self.__pending_metadata
             )
             cur.executemany(
@@ -122,6 +128,7 @@ class Database:
                 "VALUES ((SELECT id FROM torrents WHERE info_hash=?), ?, ?);",
                 self.__pending_files
             )
+            cur.execute("DROP TRIGGER torrent_id_not_null;")
             cur.execute("COMMIT;")
             logging.info("%d metadata (%d files) are committed to the database.",
                           len(self.__pending_metadata), len(self.__pending_files))
