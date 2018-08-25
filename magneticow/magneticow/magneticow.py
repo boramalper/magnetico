@@ -54,6 +54,8 @@ def torrents():
     search = flask.request.args.get("search")
     page = int(flask.request.args.get("page", 0))
 
+    use_fts = search.replace(' ','').encode('utf-8').isalnum()
+
     context = {
         "search": search,
         "page": page
@@ -68,13 +70,17 @@ def torrents():
         FROM torrents
     """
     if search:
-        SQL_query += """
-            INNER JOIN (
-                SELECT docid AS id, rank(matchinfo(fts_torrents, 'pcnxal')) AS rank
-                FROM fts_torrents
-                WHERE name MATCH ?
-            ) AS ranktable USING(id)
-        """
+        if use_fts:
+            SQL_query += """
+                INNER JOIN (
+                    SELECT docid AS id, rank(matchinfo(fts_torrents, 'pcnxal')) AS rank
+                    FROM fts_torrents
+                    WHERE name MATCH '{}'
+                ) AS ranktable USING(id)
+            """.format(search)
+        else:
+            SQL_query += "WHERE name LIKE '%{}%'".format(search.replace("'", ""))
+
     SQL_query += """
         ORDER BY {}
         LIMIT 20 OFFSET ?
@@ -93,7 +99,7 @@ def torrents():
     if sort_by not in allowed_sorts:
         return flask.Response("Invalid value for `sort_by! (Allowed values are %s)" % (allowed_sorts, ), 400)
 
-    if search:
+    if search and use_fts:
         if sort_by:
             SQL_query = SQL_query.format(sort_by + ", " + "rank ASC")
         else:
@@ -105,10 +111,7 @@ def torrents():
             SQL_query = SQL_query.format("id DESC")
 
     with magneticod_db:
-        if search:
-            cur = magneticod_db.execute(SQL_query, (search, 20 * page))
-        else:
-            cur = magneticod_db.execute(SQL_query, (20 * page, ))
+        cur = magneticod_db.execute(SQL_query, (20 * page, ))
         context["torrents"] = [Torrent(t[0].hex(), t[1], utils.to_human_size(t[2]),
                                        datetime.fromtimestamp(t[3]).strftime("%d/%m/%Y"), [])
                                for t in cur.fetchall()]

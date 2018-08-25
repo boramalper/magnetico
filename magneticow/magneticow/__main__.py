@@ -18,7 +18,7 @@ import logging
 import sys
 import textwrap
 
-import gevent.wsgi
+import gevent.pywsgi
 
 from magneticow import magneticow
 
@@ -29,7 +29,7 @@ def main() -> int:
     arguments = parse_args()
     magneticow.app.arguments = arguments
 
-    http_server = gevent.wsgi.WSGIServer((arguments.host, arguments.port), magneticow.app)
+    http_server = gevent.pywsgi.WSGIServer((arguments.host, arguments.port), magneticow.app)
 
     magneticow.initialize_magneticod_db()
 
