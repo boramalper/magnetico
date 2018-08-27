@@ -1,21 +1,37 @@
-.PHONY: test format
+.PHONY: test format magneticod magneticow ensure test-magneticod test-magneticow test-persistence image image-magneticow image-magneticod
 
-all: magneticod magneticow
+all: test magneticod magneticow
 
 magneticod:
-	go install magnetico/magneticod
+	go install --tags fts5 "-ldflags=-s -w" github.com/boramalper/magnetico/cmd/magneticod
 
 magneticow:
 	# TODO: minify files!
-	go-bindata -o="magneticow/bindata.go" -prefix="magneticow/data/" magneticow/data/...
-	go install magnetico/magneticow
+	go-bindata -o="cmd/magneticow/bindata.go" -prefix="cmd/magneticow/data/" cmd/magneticow/data/...
+	go install --tags fts5 "-ldflags=-s -w" github.com/boramalper/magnetico/cmd/magneticow
 
-test:
+image-magneticod:
+	docker build -t magneticod -f Dockerfile.magneticod .
+
+image-magneticow:
+	docker build -t magneticow -f Dockerfile.magneticow .
+
+image: image-magneticod image-magneticow
+
+# Download dependencies
+ensure:
+	dep ensure -v
+
+test-magneticod:
 	go test github.com/boramalper/magnetico/cmd/magneticod/...
-	@echo
+
+test-magneticow:
 	go test github.com/boramalper/magnetico/cmd/magneticow/...
-	@echo
+
+test-persistence:
 	go test github.com/boramalper/magnetico/pkg/persistence/...
+
+test: test-persistence test-magneticod test-magneticow
 
 format:
 	gofmt -w cmd/magneticod

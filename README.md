@@ -18,20 +18,20 @@ central entity*.
 
 ## Features
 - Easy installation & minimal requirements:
-  - Python 3.5+ and a few Python packages that is available on PyPI.
-  - Root access is *not* required to install.
+  - Pre-compiled static binaries and Docker images are provided.
+  - Root access is *not* required to install or to use.
 - Near-zero configuration:
-  - magneticod works out of the box, and magneticow requires minimal configuration to work with the
-    web server you choose.
+  - Both programs work out of the box, and **magneticow** can be used without a web-server too.
   - Detailed, step-by-step manual to guide you through the installation.
 - No reliance on any centralised entity:
-  - **magneticod** crawls the BitTorrent DHT by "going" from one node to another, and fetches the
+  - **magneticod** trawls the BitTorrent DHT by "going" from one node to another, and fetches the
     metadata using the nodes without using trackers.
 - Resilience:
   - Unlike client-server model that web applications use, P2P networks are *chaotic* and
     **magneticod** is designed to handle all the operational errors accordingly.
-- High performance implementation:
-  - **magneticod** utilizes every bit of your bandwidth to discover as many infohashes & metadata as
+    - Currently on paper, wait for the v1.0!
+- High performance implementation in Go:
+  - **magneticod** utilizes every bit of your resources to discover as many infohashes & metadata as
     possible.
 - Built-in lightweight web interface:
   - **magneticow** features a lightweight web interface to help you access the database without
@@ -56,20 +56,10 @@ for torrents in the network, hence removing the need for centralised torrent web
 ## Installation Instructions
 > **WARNING:**
 >
-> **magnetico** is still under active construction, and is considered *pre-alpha* software. Please
+> **magnetico** is still under active construction, and is considered *alpha* software. Please
 > use **magnetico** suite with care and follow the installation instructions carefully to install
 > it & secure the installation. Feel perfectly free to send bug reports, suggestions, or whatever
 > comes to your mind to send to us through GitHub or personal e-mail.
-
-
-> **WARNING:**
->
-> **magnetico** currently does NOT have any filtering system NOR it allows individual torrents to be
-> removed from the database, and BitTorrent DHT network is full of the materials that are considered
-> illegal in many countries (violence, pornography, copyright infringing content, and even
-> child-pornography). If you are afraid of the legal consequences, or simply morally against
-> (indirectly) assisting those content to spread around, follow the **magneticow** installation
-> instructions carefully to password-protect the web-interface from others.
 
 > **WARNING:**
 >
@@ -77,17 +67,17 @@ for torrents in the network, hence removing the need for centralised torrent web
 > as it is never meant to be stable (except
 > [releases](https://github.com/boramalper/magnetico/releases) of course).
 
-1. Install **magneticod** first by following its [installation instructions](magneticod/README.md).
+1. Install **magneticod** first by following its [installation instructions](cmd/magneticod/README.md).
 2. Install **magneticow** afterwards by following its
-   [installation instructions](magneticow/README.rst).
+   [installation instructions](cmd/magneticow/README.md).
 
 ## License
 
-All the code is licensed under AGPLv3, unless otherwise stated in the source specific source. See
-`COPYING` file for the full license text.
+All the code is licensed under AGPLv3, unless stated otherwise specifically. See `COPYING` for
+details.
 
 ----
 
 Dedicated to Cemile Binay, in whose hands I thrived.
 
-Bora M. ALPER <[bora@boramalper.org](mailto:bora@boramalper.org)>
+Bora M. ALPER <bora@boramalper.org>
