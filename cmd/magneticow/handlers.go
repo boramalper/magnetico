@@ -30,7 +30,9 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 // TODO: we might as well move torrents.html into static...
 func torrentsHandler(w http.ResponseWriter, r *http.Request) {
 	data := mustAsset("templates/torrents.html")
-	w.Header().Set("Content-Type", http.DetectContentType(data))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Cache static resources for a day
+	w.Header().Set("Cache-Control", "max-age=86400")
 	w.Write(data)
 }
 
@@ -75,7 +77,9 @@ func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 // TODO: we might as well move statistics.html into static...
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {
 	data := mustAsset("templates/statistics.html")
-	w.Header().Set("Content-Type", http.DetectContentType(data))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Cache static resources for a day
+	w.Header().Set("Cache-Control", "max-age=86400")
 	w.Write(data)
 }
 
@@ -149,5 +153,7 @@ func staticHandler(w http.ResponseWriter, r *http.Request) {
 		contentType = http.DetectContentType(data)
 	}
 	w.Header().Set("Content-Type", contentType)
+	// Cache static resources for a day
+	w.Header().Set("Cache-Control", "max-age=86400")
 	w.Write(data)
 }
