@@ -107,6 +107,9 @@ func apiTorrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, 500, "couldn't get torrent: %s", err.Error())
 		return
+	} else if torrent == nil {
+		respondError(w, 404, "not found")
+		return
 	}
 
 	// TODO: use plain Marshal
@@ -133,6 +136,9 @@ func apiFilesInfohashHandler(w http.ResponseWriter, r *http.Request) {
 	files, err := database.GetFiles(infohash)
 	if err != nil {
 		respondError(w, 500, "couldn't get files: %s", err.Error())
+		return
+	} else if files == nil {
+		respondError(w, 404, "not found")
 		return
 	}
 
