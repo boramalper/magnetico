@@ -76,6 +76,20 @@ for torrents in the network, hence removing the need for centralised torrent web
 All the code is licensed under AGPLv3, unless stated otherwise specifically. See `COPYING` for
 details.
 
+## Donations
+### Patreon
+https://www.patreon.com/boramalper
+
+### PayPal
+https://paypal.me/boramalper
+
+### Cryptocurrencies (Coinbase)
+- **BTC:** `3BLWjamWug3QQzcDDGwYLwuCqJyjcfYJB8`
+- **LTC:** `MRWX5SGCF7EvN15gpzT5b3KQD3Z91gH8qi`
+- **BCH:** `qqn07a58hax9l8pckq9j8ys6dsh2cnu4rsyztw2kj9`
+- **ETH:** `0xe5A8e80bAA6129DF7eBB1B5302F9e2Ef4C6f6E62`
+- **ETC:** `0x8964EcC86eaf043Bff2CdfE875E73D8095c26a58`
+
 ----
 
 Dedicated to Cemile Binay, in whose hands I thrived.
