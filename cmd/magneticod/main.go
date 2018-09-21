@@ -58,7 +58,7 @@ func main() {
 		return
 	}
 
-	zap.L().Info("magneticod v0.7.0 has been started.")
+	zap.L().Info("magneticod v0.7.0-beta1 has been started.")
 	zap.L().Info("Copyright (C) 2017  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 
