@@ -1,13 +1,13 @@
 .PHONY: test format magneticod magneticow ensure test-magneticod test-magneticow test-persistence image image-magneticow image-magneticod
 
-all: test magneticod magneticow
+all: ensure magneticod magneticow
 
 magneticod:
 	go install --tags fts5 "-ldflags=-s -w" github.com/boramalper/magnetico/cmd/magneticod
 
 magneticow:
 	# TODO: minify files!
-	go-bindata -o="cmd/magneticow/bindata.go" -prefix="cmd/magneticow/data/" cmd/magneticow/data/...
+	go-bindata -o="cmd/magneticow/bindata.go" -prefix="cmd/magneticow/data/" -pkg="main" cmd/magneticow/data/...
 	go install --tags fts5 "-ldflags=-s -w" github.com/boramalper/magnetico/cmd/magneticow
 
 image-magneticod:
@@ -37,4 +37,3 @@ format:
 	gofmt -w cmd/magneticod
 	gofmt -w cmd/magneticow
 	gofmt -w pkg/persistence
-
