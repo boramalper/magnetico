@@ -20,9 +20,12 @@ RUN     make test-persistence
 RUN     make test-magneticow
 RUN     make magneticow
 
+FROM alpine:latest
+WORKDIR /
+COPY --from=build /go/bin/magneticow /magneticow
+
 # Run the outyet command by default when the container starts.
-ENTRYPOINT ["/go/bin/magneticow"]
-CMD []
+ENTRYPOINT ["/magneticow"]
 
 # Document that the service listens on port 8080.
 EXPOSE 8080

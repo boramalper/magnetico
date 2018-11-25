@@ -2,7 +2,7 @@
 
 # Start from a Debian image with the latest version of Go installed
 # and a workspace (GOPATH) configured at /go.
-FROM golang:1.10
+FROM golang:1.10 AS build
 
 # Copy the local package files to the container's workspace.
 ADD ./Gopkg.toml      /go/src/github.com/boramalper/magnetico/
@@ -20,9 +20,9 @@ RUN     make test-persistence
 RUN     make test-magneticod
 RUN     make magneticod
 
-# Run the outyet command by default when the container starts.
-ENTRYPOINT ["/go/bin/magneticod"]
-CMD []
+FROM alpine:latest
+WORKDIR /
+COPY --from=build /go/bin/magneticod /magneticod
 
-# Document that the service listens on port 8080.
-EXPOSE 8080
+# Run the outyet command by default when the container starts.
+ENTRYPOINT ["/magneticod"]
