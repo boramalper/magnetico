@@ -9,7 +9,7 @@ import (
 	"path"
 	"text/template"
 	"time"
-	
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -27,22 +27,42 @@ func makeSqlite3Database(url_ *url.URL) (Database, error) {
 
 	dbDir, _ := path.Split(url_.Path)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		return nil, fmt.Errorf("for directory `%s`:  %s", dbDir, err.Error())
+		return nil, errors.Wrapf(err, "mkdirAll error for `%s`", dbDir)
 	}
 
 	var err error
 	url_.Scheme = ""
 	db.conn, err = sql.Open("sqlite3", url_.String())
 	if err != nil {
-		return nil, fmt.Errorf("sql.Open: %s", err.Error())
+		return nil, errors.Wrap(err, "sql.Open")
 	}
 
 	// > Open may just validate its arguments without creating a connection to the database. To
 	// > verify that the data source Name is valid, call Ping.
 	// https://golang.org/pkg/database/sql/#Open
 	if err = db.conn.Ping(); err != nil {
-		return nil, fmt.Errorf("sql.DB.Ping: %s", err.Error())
+		return nil, errors.Wrap(err, "sql.DB.Ping")
 	}
+
+	// > After some time we receive "unable to open database file" error while trying to execute a transaction using
+	// > Tx.Exec().
+	// -- boramalper
+	//
+	// > Not sure if this would be contributing to your issue, but one of the problems we've observed in the past is the
+	// > standard library's attempt to pool connections. (This makes more sense for database connections that are actual
+	// > network connections, as opposed to SQLite.)
+	// > Basically, the problem we encountered was that most pragmas (except specifically PRAGMA journal_mode=WAL, as
+	// > per the documentation) apply to the connection, so if the standard library is opening/closing connections
+	// > behind your back for pooling purposes, it can lead to unintended behavior.
+	// -- rittneje
+	//
+	// https://github.com/mattn/go-sqlite3/issues/618
+	//
+	// Our solution is to set the connection max lifetime to infinity (reuse connection forever), and max open
+	// connections to 1.
+	db.conn.SetConnMaxLifetime(0)  // https://golang.org/pkg/database/sql/#DB.SetConnMaxLifetime
+	db.conn.SetMaxOpenConns(1)
+	db.conn.SetMaxIdleConns(0)
 
 	if err := db.setupDatabase(); err != nil {
 		return nil, errors.Wrap(err, "setupDatabase")
@@ -299,7 +319,7 @@ func (db *sqlite3Database) QueryTorrents(
 	rows, err := db.conn.Query(sqlQuery, queryArgs...)
 	defer rows.Close()
 	if err != nil {
-		return nil, fmt.Errorf("error while querying torrents: %s", err.Error())
+		return nil, errors.Wrap(err, "query error")
 	}
 
 	torrents := make([]TorrentMetadata, 0)
@@ -395,7 +415,7 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 func (db *sqlite3Database) GetStatistics(from string, n uint) (*Statistics, error) {
 	fromTime, gran, err := ParseISO8601(from)
 	if err != nil {
-		return nil, fmt.Errorf("error while parsing from: %s", err.Error())
+		return nil, errors.Wrap(err, "parsing ISO8601 error")
 	}
 
 	var toTime time.Time
@@ -479,12 +499,12 @@ func (db *sqlite3Database) setupDatabase() error {
 		PRAGMA encoding='UTF-8';
 	`)
 	if err != nil {
-		return fmt.Errorf("sql.DB.Exec (PRAGMAs): %s", err.Error())
+		return errors.Wrap(err, "sql.DB.Exec (PRAGMAs)")
 	}
 
 	tx, err := db.conn.Begin()
 	if err != nil {
-		return fmt.Errorf("sql.DB.Begin: %s", err.Error())
+		return errors.Wrap(err, "sql.DB.Begin")
 	}
 	// If everything goes as planned and no error occurs, we will commit the transaction before
 	// returning from the function so the tx.Rollback() call will fail, trying to rollback a
@@ -512,13 +532,13 @@ func (db *sqlite3Database) setupDatabase() error {
 		);
 	`)
 	if err != nil {
-		return fmt.Errorf("sql.Tx.Exec (v0): %s", err.Error())
+		return errors.Wrap(err, "sql.Tx.Exec (v0)")
 	}
 
 	// Get the user_version:
 	rows, err := tx.Query("PRAGMA user_version;")
 	if err != nil {
-		return fmt.Errorf("sql.Tx.Query (user_version): %s", err.Error())
+		return errors.Wrap(err, "sql.Tx.Query (user_version)")
 	}
 	defer rows.Close()
 	var userVersion int
@@ -526,7 +546,7 @@ func (db *sqlite3Database) setupDatabase() error {
 		return fmt.Errorf("sql.Rows.Next (user_version): PRAGMA user_version did not return any rows!")
 	}
 	if err = rows.Scan(&userVersion); err != nil {
-		return fmt.Errorf("sql.Rows.Scan (user_version): %s", err.Error())
+		return errors.Wrap(err, "sql.Rows.Scan (user_version)")
 	}
 
 	switch userVersion {
@@ -541,7 +561,7 @@ func (db *sqlite3Database) setupDatabase() error {
 			PRAGMA user_version = 1;
 		`)
 		if err != nil {
-			return fmt.Errorf("sql.Tx.Exec (v0 -> v1): %s", err.Error())
+			return errors.Wrap(err, "sql.Tx.Exec (v0 -> v1)")
 		}
 		fallthrough
 
@@ -586,7 +606,7 @@ func (db *sqlite3Database) setupDatabase() error {
 			PRAGMA user_version = 2;
 		`)
 		if err != nil {
-			return fmt.Errorf("sql.Tx.Exec (v1 -> v2): %s", err.Error())
+			return errors.Wrap(err, "sql.Tx.Exec (v1 -> v2)")
 		}
 		fallthrough
 
@@ -650,7 +670,7 @@ func (db *sqlite3Database) setupDatabase() error {
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("sql.Tx.Commit: %s", err.Error())
+		return errors.Wrap(err, "sql.Tx.Commit")
 	}
 
 	return nil
