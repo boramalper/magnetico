@@ -8,6 +8,7 @@ package mainline
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/pkg/errors"
 	"net"
 
 	"github.com/anacrolix/missinggo/iter"
@@ -251,10 +252,10 @@ func (e *Error) UnmarshalBencode(b []byte) (err error) {
 
 	matches := result[0][1:]
 	if _, err := fmt.Sscanf(string(matches[0]), "%d", &code); err != nil {
-		return fmt.Errorf("could not parse the error code: %s", err.Error())
+		return errors.Wrap(err, "could not parse error code")
 	}
 	if _, err := fmt.Sscanf(string(matches[1]), "%d", &msgLen); err != nil {
-		return fmt.Errorf("could not parse the error message length: %s", err.Error())
+		return errors.Wrap(err, "could not parse error msg length")
 	}
 
 	if len(matches[2]) != msgLen {

@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/pkg/errors"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -156,7 +156,7 @@ func main() {
 	var err error
 	database, err = persistence.MakeDatabase(opts.Database, logger)
 	if err != nil {
-		panic(err.Error())
+		zap.L().Fatal("could not access to database", zap.Error(err))
 	}
 
 	decoder.IgnoreUnknownKeys(false)
@@ -178,7 +178,8 @@ func respondError(w http.ResponseWriter, statusCode int, format string, a ...int
 func mustAsset(name string) []byte {
 	data, err := Asset(name)
 	if err != nil {
-		log.Panicf("Could NOT access the requested resource `%s`: %s (please inform us, this is a BUG!)", name, err.Error())
+		zap.L().Panic("Could NOT access the requested resource! THIS IS A BUG, PLEASE REPORT",
+			zap.String("name", name), zap.Error(err))
 	}
 	return data
 }
@@ -250,7 +251,7 @@ func loadCred(cred string) error {
 			if err == io.EOF {
 				break
 			}
-			return fmt.Errorf("error while reading line %d: %s", lineno, err.Error())
+			return errors.Wrapf(err, "while reading line %d", lineno)
 		}
 
 		line = line[:len(line)-1] // strip '\n'
@@ -316,7 +317,5 @@ func BasicAuth(handler http.HandlerFunc, realm string) http.HandlerFunc {
 func authenticate(w http.ResponseWriter, realm string) {
 	w.Header().Set("WWW-Authenticate", `Basic realm="`+realm+`"`)
 	w.WriteHeader(401)
-	if _, err := w.Write([]byte("Unauthorised.\n")); err != nil {
-		panic(err.Error())
-	}
+	_, _ = w.Write([]byte("Unauthorised.\n"))
 }

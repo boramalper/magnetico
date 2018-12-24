@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
+	"github.com/pkg/errors"
 	"net/http"
 	"strings"
 	"time"
@@ -14,73 +16,67 @@ import (
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	nTorrents, err := database.GetNumberOfTorrents()
 	if err != nil {
-		panic(err.Error())
+		handlerError(errors.Wrap(err, "GetNumberOfTorrents"), w)
+		return
 	}
 
-	err = templates["homepage"].Execute(w, struct {
+	_ = templates["homepage"].Execute(w, struct {
 		NTorrents uint
 	}{
 		NTorrents: nTorrents,
 	})
-	if err != nil {
-		panic(err.Error())
-	}
 }
 
-// TODO: we might as well move torrents.html into static...
 func torrentsHandler(w http.ResponseWriter, r *http.Request) {
 	data := mustAsset("templates/torrents.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// Cache static resources for a day
 	w.Header().Set("Cache-Control", "max-age=86400")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 	infoHash, err := hex.DecodeString(mux.Vars(r)["infohash"])
 	if err != nil {
-		panic(err.Error())
+		handlerError(errors.Wrap(err, "cannot decode infohash"), w)
+		return
 	}
 
 	torrent, err := database.GetTorrent(infoHash)
 	if err != nil {
-		panic(err.Error())
+		handlerError(errors.Wrap(err, "cannot get torrent"), w)
+		return
 	}
 	if torrent == nil {
-		w.WriteHeader(404)
-		w.Write([]byte("torrent not found!"))
+		respondError(w, http.StatusNotFound, "torrent not found!")
 		return
 	}
 
 	files, err := database.GetFiles(infoHash)
 	if err != nil {
-		panic(err.Error())
+		handlerError(errors.Wrap(err, "could not get files"), w)
+		return
 	}
 	if files == nil {
-		w.WriteHeader(500)
-		w.Write([]byte("files not found what!!!"))
+		handlerError(fmt.Errorf("could not get files"), w)
 		return
 	}
 
-	err = templates["torrent"].Execute(w, struct {
+	_ = templates["torrent"].Execute(w, struct {
 		T *persistence.TorrentMetadata
 		F []persistence.File
 	}{
 		T: torrent,
 		F: files,
 	})
-	if err != nil {
-		panic("error while executing template!")
-	}
 }
 
-// TODO: we might as well move statistics.html into static...
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {
 	data := mustAsset("templates/statistics.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// Cache static resources for a day
 	w.Header().Set("Cache-Control", "max-age=86400")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func feedHandler(w http.ResponseWriter, r *http.Request) {
@@ -111,32 +107,24 @@ func feedHandler(w http.ResponseWriter, r *http.Request) {
 		nil,
 	)
 	if err != nil {
-		respondError(w, 400, err.Error())
+		handlerError(errors.Wrap(err, "query torrent"), w)
 		return
 	}
 
 	// It is much more convenient to write the XML deceleration manually*, and then process the XML
-	// template using template/html and send, then to use encoding/xml.
+	// template using template/html and send, than to use encoding/xml.
 	//
 	// *: https://github.com/golang/go/issues/3133
 	//
 	// TODO: maybe do it properly, even if it's inconvenient?
-
-	_, err = w.Write([]byte(`<?xml version="1.0" encoding="utf-8" standalone="yes"?>`))
-	if err != nil {
-		panic(err.Error())
-	}
-
-	err = templates["feed"].Execute(w, struct {
+	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8" standalone="yes"?>`))
+	_ = templates["feed"].Execute(w, struct {
 		Title    string
 		Torrents []persistence.TorrentMetadata
 	}{
 		Title:    title,
 		Torrents: torrents,
 	})
-	if err != nil {
-		panic(err.Error())
-	}
 }
 
 func staticHandler(w http.ResponseWriter, r *http.Request) {
@@ -155,5 +143,5 @@ func staticHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", contentType)
 	// Cache static resources for a day
 	w.Header().Set("Cache-Control", "max-age=86400")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
