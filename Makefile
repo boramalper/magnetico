@@ -3,12 +3,13 @@
 all: test magneticod magneticow
 
 magneticod:
-	go install --tags fts5 "-ldflags=-s -w" github.com/boramalper/magnetico/cmd/magneticod
+	go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" github.com/boramalper/magnetico/cmd/magneticod
 
 magneticow:
 	# TODO: minify files!
+	# https://github.com/kevinburke/go-bindata
 	go-bindata -o="cmd/magneticow/bindata.go" -prefix="cmd/magneticow/data/" cmd/magneticow/data/...
-	go install --tags fts5 "-ldflags=-s -w" github.com/boramalper/magnetico/cmd/magneticow
+	go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" github.com/boramalper/magnetico/cmd/magneticow
 
 image-magneticod:
 	docker build -t magneticod -f Dockerfile.magneticod .

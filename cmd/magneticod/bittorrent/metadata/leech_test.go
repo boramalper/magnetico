@@ -2,9 +2,8 @@ package metadata
 
 import (
 	"bytes"
-	"testing"
-
 	"github.com/anacrolix/torrent/bencode"
+	"testing"
 )
 
 var operationsTest_instances = []struct {
