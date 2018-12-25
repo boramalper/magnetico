@@ -31,6 +31,8 @@ import (
 
 const N_TORRENTS = 20
 
+var compiledOn string
+
 // Set a Decoder instance as a package global, because it caches
 // meta-data about structs, and an instance can be shared safely.
 var decoder = schema.NewDecoder()
@@ -44,6 +46,7 @@ var opts struct {
 	Credentials        map[string][]byte // TODO: encapsulate credentials and mutex for safety
 	CredentialsRWMutex sync.RWMutex
 	CredentialsPath    string
+	Verbosity          int
 }
 
 func main() {
@@ -58,13 +61,26 @@ func main() {
 	zap.ReplaceGlobals(logger)
 
 	zap.L().Info("magneticow v0.7.0-beta1 has been started.")
-	zap.L().Info("Copyright (C) 2017  Mert Bora ALPER <bora@boramalper.org>.")
+	zap.L().Info("Copyright (C) 2018  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
+	zap.S().Infof("Compiled on %s", compiledOn)
 
 	if err := parseFlags(); err != nil {
 		zap.L().Error("Error while initializing", zap.Error(err))
 		return
 	}
+
+	switch opts.Verbosity {
+	case 0:
+		loggerLevel.SetLevel(zap.WarnLevel)
+	case 1:
+		loggerLevel.SetLevel(zap.InfoLevel)
+	default: // Default: i.e. in case of 2 or more.
+		// TODO: print the caller (function)'s name and line number!
+		loggerLevel.SetLevel(zap.DebugLevel)
+	}
+
+	zap.ReplaceGlobals(logger)
 
 	// Reload credentials when you receive SIGHUP
 	sighupChan := make(chan os.Signal, 1)
@@ -190,6 +206,8 @@ func parseFlags() error {
 		Database string `short:"d" long:"database"    description:"URL of the (magneticod) database"`
 		Cred     string `short:"c" long:"credentials" description:"Path to the credentials file"`
 		NoAuth   bool   `          long:"no-auth"     description:"Disables authorisation"`
+
+		Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
 	}
 
 	if _, err := flags.Parse(&cmdFlags); err != nil {
@@ -221,8 +239,6 @@ func parseFlags() error {
 		opts.CredentialsPath = cmdFlags.Cred
 	}
 
-	fmt.Printf("%v credpath  %s\n", cmdFlags.NoAuth, opts.CredentialsPath)
-
 	if opts.CredentialsPath != "" {
 		opts.Credentials = make(map[string][]byte)
 		if err := loadCred(opts.CredentialsPath); err != nil {
@@ -231,6 +247,8 @@ func parseFlags() error {
 	} else {
 		opts.Credentials = nil
 	}
+
+	opts.Verbosity = len(cmdFlags.Verbose)
 
 	return nil
 }

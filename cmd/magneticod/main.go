@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -40,6 +41,8 @@ type opFlags struct {
 	Profile   string
 }
 
+var compiledOn string
+
 func main() {
 	loggerLevel := zap.NewAtomicLevel()
 	// Logging levels: ("debug", "info", "warn", "error", "dpanic", "panic", and "fatal").
@@ -58,9 +61,10 @@ func main() {
 		return
 	}
 
-	zap.L().Info("magneticod v0.7.0-beta1 has been started.")
-	zap.L().Info("Copyright (C) 2017  Mert Bora ALPER <bora@boramalper.org>.")
+	zap.L().Info("magneticod v0.7.0-beta2 has been started.")
+	zap.L().Info("Copyright (C) 2018  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
+	zap.S().Infof("Compiled on %s", compiledOn)
 
 	switch opFlags.Verbosity {
 	case 0:
@@ -91,17 +95,22 @@ func main() {
 		zap.L().Panic("NOT IMPLEMENTED")
 	}
 
+	// Initialise the random number generator
+	rand.Seed(time.Now().UnixNano())
+
 	// Handle Ctrl-C gracefully.
 	interruptChan := make(chan os.Signal)
 	signal.Notify(interruptChan, os.Interrupt)
 
 	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, logger)
 	if err != nil {
-		logger.Sugar().Fatalf("Could not open the database at `%s`: %s", opFlags.DatabaseURL, err.Error())
+		logger.Sugar().Fatalf("Could not open the database at `%s`", opFlags.DatabaseURL, zap.Error(err))
 	}
 
 	trawlingManager := dht.NewTrawlingManager(opFlags.TrawlerMlAddrs)
 	metadataSink := metadata.NewSink(2 * time.Minute)
+
+	zap.L().Debug("Peer ID", zap.ByteString("peerID", metadataSink.PeerID))
 
 	// The Event Loop
 	for stopped := false; !stopped; {
@@ -117,8 +126,8 @@ func main() {
 
 		case md := <-metadataSink.Drain():
 			if err := database.AddNewTorrent(md.InfoHash, md.Name, md.Files); err != nil {
-				logger.Sugar().Fatalf("Could not add new torrent %x to the database: %s",
-					md.InfoHash, err.Error())
+				logger.Sugar().Fatalf("Could not add new torrent %x to the database",
+					md.InfoHash, zap.Error(err))
 			}
 			zap.L().Info("Fetched!", zap.String("name", md.Name), util.HexField("infoHash", md.InfoHash))
 
@@ -147,13 +156,16 @@ func parseFlags() (*opFlags, error) {
 			"sqlite3://" +
 				appdirs.UserDataDir("magneticod", "", "", false) +
 				"/database.sqlite3" +
-				"?_journal_mode=WAL" // https://github.com/mattn/go-sqlite3#connection-string
+				"?_journal_mode=WAL" + // https://github.com/mattn/go-sqlite3#connection-string
+				"&_busy_timeout=3000" + // in milliseconds
+				"&_foreign_keys=true"
+
 	} else {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}
 
 	if err = checkAddrs(cmdF.TrawlerMlAddrs); err != nil {
-		zap.S().Fatalf("Of argument (list) `trawler-ml-addr` %s", err.Error())
+		zap.S().Fatalf("Of argument (list) `trawler-ml-addr`", zap.Error(err))
 	} else {
 		opF.TrawlerMlAddrs = cmdF.TrawlerMlAddrs
 	}
@@ -178,7 +190,7 @@ func checkAddrs(addrs []string) error {
 		// well.
 		_, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
-			return fmt.Errorf("with %d(th) address `%s`: %s", i+1, addr, err.Error())
+			return errors.Wrapf(err, "%d(th) address (%s) error", i+1, addr)
 		}
 	}
 	return nil
