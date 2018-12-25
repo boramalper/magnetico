@@ -59,10 +59,11 @@ func makeSqlite3Database(url_ *url.URL) (Database, error) {
 	// https://github.com/mattn/go-sqlite3/issues/618
 	//
 	// Our solution is to set the connection max lifetime to infinity (reuse connection forever), and max open
-	// connections to 1.
-	db.conn.SetConnMaxLifetime(0)  // https://golang.org/pkg/database/sql/#DB.SetConnMaxLifetime
-	db.conn.SetMaxOpenConns(1)
-	db.conn.SetMaxIdleConns(0)
+	// connections to 3 (1 causes deadlocks, unlimited is too lax!). Max idle conns are set to 3 to persist connections
+	// (instead of opening the database again and again).
+	db.conn.SetConnMaxLifetime(0) // https://golang.org/pkg/database/sql/#DB.SetConnMaxLifetime
+	db.conn.SetMaxOpenConns(3)
+	db.conn.SetMaxIdleConns(3)
 
 	if err := db.setupDatabase(); err != nil {
 		return nil, errors.Wrap(err, "setupDatabase")
