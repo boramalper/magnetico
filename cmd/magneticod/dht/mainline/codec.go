@@ -8,13 +8,15 @@ package mainline
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/pkg/errors"
 	"net"
+
+	"github.com/pkg/errors"
+
+	"regexp"
 
 	"github.com/anacrolix/missinggo/iter"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/willf/bloom"
-	"regexp"
 )
 
 type Message struct {
