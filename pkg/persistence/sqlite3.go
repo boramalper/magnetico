@@ -318,7 +318,7 @@ func (db *sqlite3Database) QueryTorrents(
 	queryArgs = append(queryArgs, limit)
 
 	rows, err := db.conn.Query(sqlQuery, queryArgs...)
-	defer rows.Close()
+	defer closeRows(rows)
 	if err != nil {
 		return nil, errors.Wrap(err, "query error")
 	}
@@ -375,7 +375,7 @@ func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 		WHERE info_hash = ?`,
 		infoHash,
 	)
-	defer rows.Close()
+	defer closeRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +396,7 @@ func (db *sqlite3Database) GetFiles(infoHash []byte) ([]File, error) {
 	rows, err := db.conn.Query(
 		"SELECT size, path FROM files, torrents WHERE files.torrent_id = torrents.id AND torrents.info_hash = ?;",
 		infoHash)
-	defer rows.Close()
+	defer closeRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +453,7 @@ func (db *sqlite3Database) GetStatistics(from string, n uint) (*Statistics, erro
 			GROUP BY dt;`,
 		timef),
 		fromTime.Unix(), toTime.Unix())
-	defer rows.Close()
+	defer closeRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -686,4 +686,10 @@ func executeTemplate(text string, data interface{}, funcs template.FuncMap) stri
 		panic(err.Error())
 	}
 	return buf.String()
+}
+
+func closeRows(rows *sql.Rows) {
+	if err := rows.Close(); err != nil {
+		zap.L().Error("could not close row", zap.Error(err))
+	}
 }
