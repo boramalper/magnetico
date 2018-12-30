@@ -41,12 +41,14 @@ var templates map[string]*template.Template
 var database persistence.Database
 
 var opts struct {
-	Addr               string
-	Database           string
+	Addr     string
+	Database string
+	// Credentials is nil when no-auth cmd-line flag is supplied.
 	Credentials        map[string][]byte // TODO: encapsulate credentials and mutex for safety
 	CredentialsRWMutex sync.RWMutex
-	CredentialsPath    string
-	Verbosity          int
+	// CredentialsPath is nil when no-auth is supplied.
+	CredentialsPath string
+	Verbosity       int
 }
 
 func main() {
@@ -230,22 +232,22 @@ func parseFlags() error {
 		opts.Database = cmdFlags.Database
 	}
 
-	if cmdFlags.Cred == "" && !cmdFlags.NoAuth {
-		opts.CredentialsPath = path.Join(
-			appdirs.UserConfigDir("magneticow", "", "", false),
-			"credentials",
-		)
-	} else {
-		opts.CredentialsPath = cmdFlags.Cred
-	}
+	if !cmdFlags.NoAuth {
+		// Set opts.CredentialsPath to either the default value (computed by appdirs pkg) or to the one
+		// supplied by the user.
+		if cmdFlags.Cred == "" {
+			opts.CredentialsPath = path.Join(
+				appdirs.UserConfigDir("magneticow", "", "", false),
+				"credentials",
+			)
+		} else {
+			opts.CredentialsPath = cmdFlags.Cred
+		}
 
-	if opts.CredentialsPath != "" {
 		opts.Credentials = make(map[string][]byte)
 		if err := loadCred(opts.CredentialsPath); err != nil {
 			return err
 		}
-	} else {
-		opts.Credentials = nil
 	}
 
 	opts.Verbosity = len(cmdFlags.Verbose)
@@ -309,6 +311,11 @@ func loadCred(cred string) error {
 // Source: https://stackoverflow.com/a/39591234/4466589
 func BasicAuth(handler http.HandlerFunc, realm string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if opts.Credentials == nil { // --no-auth is supplied by the user.
+			handler(w, r)
+			return
+		}
+
 		username, password, ok := r.BasicAuth()
 		if !ok { // No credentials provided
 			authenticate(w, realm)
