@@ -2,7 +2,6 @@ package metadata
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
@@ -47,6 +46,8 @@ type Leech struct {
 	ut_metadata                    uint8
 	metadataReceived, metadataSize uint
 	metadata                       []byte
+
+	connClosed bool
 }
 
 type LeechEventHandlers struct {
@@ -54,15 +55,12 @@ type LeechEventHandlers struct {
 	OnError   func([20]byte, error) // must be supplied. args: infohash, error
 }
 
-func NewLeech(infoHash [20]byte, peerAddr *net.TCPAddr, ev LeechEventHandlers) *Leech {
+func NewLeech(infoHash [20]byte, peerAddr *net.TCPAddr, clientID []byte, ev LeechEventHandlers) *Leech {
 	l := new(Leech)
 	l.infoHash = infoHash
 	l.peerAddr = peerAddr
+	copy(l.clientID[:], clientID)
 	l.ev = ev
-
-	if _, err := rand.Read(l.clientID[:]); err != nil {
-		panic(err.Error())
-	}
 
 	return l
 }
@@ -286,17 +284,26 @@ func (l *Leech) connect(deadline time.Time) error {
 	return nil
 }
 
+func (l *Leech) closeConn() {
+	if l.connClosed {
+		return
+	}
+
+	if err := l.conn.Close(); err != nil {
+		zap.L().Panic("couldn't close leech connection!", zap.Error(err))
+		return
+	}
+
+	l.connClosed = true
+}
+
 func (l *Leech) Do(deadline time.Time) {
 	err := l.connect(deadline)
 	if err != nil {
 		l.OnError(errors.Wrap(err, "connect"))
 		return
 	}
-	defer func() {
-		if err := l.conn.Close(); err != nil {
-			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
-		}
-	}()
+	defer l.closeConn()
 
 	err = l.doBtHandshake()
 	if err != nil {
@@ -328,7 +335,7 @@ func (l *Leech) Do(deadline time.Time) {
 		rExtDict := new(extDict)
 		err = bencode.NewDecoder(rMessageBuf).Decode(rExtDict)
 		if err != nil {
-			zap.L().Warn("Couldn't decode extension message in the loop!", zap.Error(err))
+			l.OnError(errors.Wrap(err, "could not decode ext msg in the loop"))
 			return
 		}
 
@@ -370,6 +377,10 @@ func (l *Leech) Do(deadline time.Time) {
 			}
 		}
 	}
+
+	// We are done with the transfer, close socket as soon as possible (i.e. NOW) to avoid hitting "too many open files"
+	// error.
+	l.closeConn()
 
 	// Verify the checksum
 	sha1Sum := sha1.Sum(l.metadata)

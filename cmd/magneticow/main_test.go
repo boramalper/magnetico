@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -113,5 +112,4 @@ func TestSchemaRequired(t *testing.T) {
 	if err == nil {
 		t.Error("err is nil")
 	}
-	fmt.Printf(err.Error())
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
 	"net/url"
 
 	"go.uber.org/zap"
@@ -104,7 +105,7 @@ func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 
 	url_, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "url.Parse")
 	}
 
 	switch url_.Scheme {

@@ -1,7 +1,7 @@
 # magnetico
 *Autonomous (self-hosted) BitTorrent DHT search engine suite.*
 
-[![chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/magnetico-dev/magnetico-dev)&emsp;[![Build Status on Travis CI](https://travis-ci.org/boramalper/magnetico.svg?branch=go-rewrite)](https://travis-ci.org/boramalper/magnetico)&ensp;[![Build status on AppVeyor](https://ci.appveyor.com/api/projects/status/u2jtbe6jutya7p0x/branch/go-rewrite?svg=true)](https://ci.appveyor.com/project/boramalper/magnetico/branch/go-rewrite)
+[![chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/magnetico-dev/magnetico-dev)&emsp;[![Build Status](https://travis-ci.org/boramalper/magnetico.svg?branch=master)](https://travis-ci.org/boramalper/magnetico)&emsp;[![Build status on AppVeyor](https://ci.appveyor.com/api/projects/status/u2jtbe6jutya7p0x/branch/go-rewrite?svg=true)](https://ci.appveyor.com/project/boramalper/magnetico/branch/go-rewrite)
 
 magnetico is the first autonomous (self-hosted) BitTorrent DHT search engine suite that is *designed
 for end-users*. The suite consists of two packages:

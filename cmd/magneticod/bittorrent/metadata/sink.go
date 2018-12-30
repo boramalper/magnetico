@@ -1,15 +1,15 @@
 package metadata
 
 import (
-	"crypto/rand"
+	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/boramalper/magnetico/pkg/util"
 	"go.uber.org/zap"
 
 	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
 	"github.com/boramalper/magnetico/pkg/persistence"
+	"github.com/boramalper/magnetico/pkg/util"
 )
 
 type Metadata struct {
@@ -24,8 +24,9 @@ type Metadata struct {
 }
 
 type Sink struct {
-	clientID             []byte
+	PeerID               []byte
 	deadline             time.Duration
+	maxNLeeches          int
 	drain                chan Metadata
 	incomingInfoHashes   map[[20]byte]struct{}
 	incomingInfoHashesMx sync.Mutex
@@ -33,18 +34,50 @@ type Sink struct {
 	termination          chan interface{}
 }
 
-func NewSink(deadline time.Duration) *Sink {
+func randomID() []byte {
+	/* > The peer_id is exactly 20 bytes (characters) long.
+	 * >
+	 * > There are mainly two conventions how to encode client and client version information into the peer_id,
+	 * > Azureus-style and Shadow's-style.
+	 * >
+	 * > Azureus-style uses the following encoding: '-', two characters for client id, four ascii digits for version
+	 * > number, '-', followed by random numbers.
+	 * >
+	 * > For example: '-AZ2060-'...
+	 *
+	 * https://wiki.theory.org/index.php/BitTorrentSpecification
+	 *
+	 * We encode the version number as:
+	 *  - First two digits for the major version number
+	 *  - Last two digits for the minor version number
+	 *  - Patch version number is not encoded.
+	 */
+	prefix := []byte("-MC0007-")
+
+	var rando []byte
+	for i := 20 - len(prefix); i >= 0; i-- {
+		rando = append(rando, randomDigit())
+	}
+
+	return append(prefix, rando...)
+}
+
+func randomDigit() byte {
+	var max, min int
+	max, min = '9', '0'
+	return byte(rand.Intn(max-min) + min)
+}
+
+func NewSink(deadline time.Duration, maxNLeeches int) *Sink {
 	ms := new(Sink)
 
-	ms.clientID = make([]byte, 20)
-	_, err := rand.Read(ms.clientID)
-	if err != nil {
-		zap.L().Panic("sinkMetadata couldn't read 20 random bytes for client ID!", zap.Error(err))
-	}
+	ms.PeerID = randomID()
 	ms.deadline = deadline
+	ms.maxNLeeches = maxNLeeches
 	ms.drain = make(chan Metadata)
 	ms.incomingInfoHashes = make(map[[20]byte]struct{})
 	ms.termination = make(chan interface{})
+
 	return ms
 }
 
@@ -54,6 +87,11 @@ func (ms *Sink) Sink(res mainline.TrawlingResult) {
 	}
 	ms.incomingInfoHashesMx.Lock()
 	defer ms.incomingInfoHashesMx.Unlock()
+
+	// cap the max # of leeches
+	if len(ms.incomingInfoHashes) >= ms.maxNLeeches {
+		return
+	}
 
 	if _, exists := ms.incomingInfoHashes[res.InfoHash]; exists {
 		return
@@ -66,7 +104,7 @@ func (ms *Sink) Sink(res mainline.TrawlingResult) {
 
 	zap.L().Info("Sunk!", zap.Int("leeches", len(ms.incomingInfoHashes)), util.HexField("infoHash", res.InfoHash[:]))
 
-	go NewLeech(res.InfoHash, res.PeerAddr, LeechEventHandlers{
+	go NewLeech(res.InfoHash, res.PeerAddr, ms.PeerID, LeechEventHandlers{
 		OnSuccess: ms.flush,
 		OnError:   ms.onLeechError,
 	}).Do(time.Now().Add(ms.deadline))
@@ -88,20 +126,23 @@ func (ms *Sink) Terminate() {
 }
 
 func (ms *Sink) flush(result Metadata) {
-	if !ms.terminated {
-		ms.drain <- result
-		// Delete the infoHash from ms.incomingInfoHashes ONLY AFTER once we've flushed the
-		// metadata!
-		var infoHash [20]byte
-		copy(infoHash[:], result.InfoHash)
-		ms.incomingInfoHashesMx.Lock()
-		delete(ms.incomingInfoHashes, infoHash)
-		ms.incomingInfoHashesMx.Unlock()
+	if ms.terminated {
+		return
 	}
+
+	ms.drain <- result
+	// Delete the infoHash from ms.incomingInfoHashes ONLY AFTER once we've flushed the
+	// metadata!
+	var infoHash [20]byte
+	copy(infoHash[:], result.InfoHash)
+	ms.incomingInfoHashesMx.Lock()
+	delete(ms.incomingInfoHashes, infoHash)
+	ms.incomingInfoHashesMx.Unlock()
 }
 
 func (ms *Sink) onLeechError(infoHash [20]byte, err error) {
 	zap.L().Debug("leech error", util.HexField("infoHash", infoHash[:]), zap.Error(err))
+
 	ms.incomingInfoHashesMx.Lock()
 	delete(ms.incomingInfoHashes, infoHash)
 	ms.incomingInfoHashesMx.Unlock()

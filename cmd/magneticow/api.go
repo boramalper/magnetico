@@ -48,7 +48,7 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tq.LastID != nil && *tq.LastID < 0 {
+	if tq.LastID == nil {
 		respondError(w, 400, "lastID has to be greater than or equal to zero")
 		return
 	}
