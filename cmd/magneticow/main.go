@@ -60,13 +60,13 @@ func main() {
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
 
-	zap.L().Info("magneticow v0.7.0-beta1 has been started.")
+	zap.L().Info("magneticow v0.7.1 has been started.")
 	zap.L().Info("Copyright (C) 2018  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 	zap.S().Infof("Compiled on %s", compiledOn)
 
 	if err := parseFlags(); err != nil {
-		zap.L().Error("Error while initializing", zap.Error(err))
+		zap.S().Errorf("error while parsing flags: %s", err.Error())
 		return
 	}
 
