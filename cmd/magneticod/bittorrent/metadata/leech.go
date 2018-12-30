@@ -335,7 +335,7 @@ func (l *Leech) Do(deadline time.Time) {
 		rExtDict := new(extDict)
 		err = bencode.NewDecoder(rMessageBuf).Decode(rExtDict)
 		if err != nil {
-			zap.L().Warn("Couldn't decode extension message in the loop!", zap.Error(err))
+			l.OnError(errors.Wrap(err, "could not decode ext msg in the loop"))
 			return
 		}
 
