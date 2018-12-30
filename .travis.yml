@@ -1,10 +1,10 @@
 # https://docs.travis-ci.com/user/reference/overview/#virtualisation-environment-vs-operating-system
 sudo: false
-dist: trusty
+dist: xenial
 
 language: go
 go:
-  - "1.10"
+  - "1.11"
 
 # Only clone the most recent commit.
 git:
@@ -16,41 +16,26 @@ env:
 before_install:
   # Dump environment variables
   - printenv
-  # Download the binary to bin folder in $GOPATH
+  # Download dep binary to bin folder in $GOPATH
   - curl -L -s https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64 -o $GOPATH/bin/dep
   # Make the binary executable
   - chmod +x $GOPATH/bin/dep
 
 install:
-  - "go get -u github.com/jteeuwen/go-bindata/..."
-  - "dep ensure"
+  - "go get -u -v github.com/kevinburke/go-bindata/..."
+  - "go get -u -v honnef.co/go/tools/cmd/staticcheck"
+  - "make ensure"
 
 before_script:
-  - "go-bindata
-       -o=\"${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticow/bindata.go\"
-       -prefix=\"${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticow/data/\"
-       ${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticow/data/..."
+  - "make magneticod"
+  - "make magneticow"
 
 script:
   # The Unit Tests
-  - "go test github.com/boramalper/magnetico/cmd/magneticod/..."
-  - "go test github.com/boramalper/magnetico/cmd/magneticow/..."
-  - "go test github.com/boramalper/magnetico/pkg/persistence/..."
+  - "make test"
 
   # Static Analysis (vet)
-  - "go vet github.com/boramalper/magnetico/cmd/magneticod/..."
-  - "go vet github.com/boramalper/magnetico/cmd/magneticow/..."
-  - "go vet github.com/boramalper/magnetico/pkg/persistence/..."
+  - "make vet"
 
-  # Formatting Errors
-  #
-  # Since gofmt returns zero even if there are files to be formatted, we use:
-  #
-  #   ! gofmt -d ${GOPATH}/path/ 2>&1 | read
-  #
-  # to return 1 if there are files to be formatted, and 0 if not.
-  #
-  # https://groups.google.com/forum/#!topic/Golang-Nuts/pdrN4zleUio
-  - "! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticod/ 2>&1 | read"
-  - "! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/cmd/magneticow/ 2>&1 | read"
-  - "! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/pkg/persistence/ 2>&1 | read"
+  # Check formatting
+  - "make check-formatting"
