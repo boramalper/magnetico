@@ -31,32 +31,44 @@ func ParseISO8601(s string) (*time.Time, Granularity, error) {
 		if err != nil {
 			return nil, -1, err
 		}
+
 		t := time.Date(year, time.December, daysOfMonth(time.December, year), 23, 59, 59, 0, time.UTC)
 		return &t, Year, nil
 	}
 
 	if matches := monthRE.FindStringSubmatch(s); len(matches) != 0 {
 		month, err := parseMonth(matches[2])
+		if err != nil {
+			return nil, -1, err
+		}
 		year, err := parseYear(matches[1])
 		if err != nil {
 			return nil, -1, err
 		}
+
 		t := time.Date(year, month, 31, 23, 59, 59, 0, time.UTC)
 		return &t, Month, nil
 	}
 
 	if matches := weekRE.FindStringSubmatch(s); len(matches) != 0 {
 		week, err := parseWeek(matches[2])
+		if err != nil {
+			return nil, -1, err
+		}
 		year, err := parseYear(matches[1])
 		if err != nil {
 			return nil, -1, err
 		}
+
 		t := time.Date(year, time.January, week*7, 23, 59, 59, 0, time.UTC)
 		return &t, Week, nil
 	}
 
 	if matches := dayRE.FindStringSubmatch(s); len(matches) != 0 {
 		month, err := parseMonth(matches[2])
+		if err != nil {
+			return nil, -1, err
+		}
 		year, err := parseYear(matches[1])
 		if err != nil {
 			return nil, -1, err
@@ -65,21 +77,29 @@ func ParseISO8601(s string) (*time.Time, Granularity, error) {
 		if err != nil {
 			return nil, -1, err
 		}
+
 		t := time.Date(year, month, day, 23, 59, 59, 0, time.UTC)
 		return &t, Day, nil
 	}
 
 	if matches := hourRE.FindStringSubmatch(s); len(matches) != 0 {
 		month, err := parseMonth(matches[2])
+		if err != nil {
+			return nil, -1, err
+		}
 		year, err := parseYear(matches[1])
 		if err != nil {
 			return nil, -1, err
 		}
 		hour, err := parseHour(matches[4])
+		if err != nil {
+			return nil, -1, err
+		}
 		day, err := parseDay(matches[3], daysOfMonth(month, year))
 		if err != nil {
 			return nil, -1, err
 		}
+
 		t := time.Date(year, month, day, hour, 59, 59, 0, time.UTC)
 		return &t, Hour, nil
 	}
