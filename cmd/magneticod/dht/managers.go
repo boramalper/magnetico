@@ -1,6 +1,9 @@
 package dht
 
-import "github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
+import (
+	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
+	"time"
+)
 
 type TrawlingManager struct {
 	// private
@@ -8,7 +11,7 @@ type TrawlingManager struct {
 	services []*mainline.TrawlingService
 }
 
-func NewTrawlingManager(mlAddrs []string) *TrawlingManager {
+func NewTrawlingManager(mlAddrs []string, interval time.Duration) *TrawlingManager {
 	manager := new(TrawlingManager)
 	manager.output = make(chan mainline.TrawlingResult)
 
@@ -19,6 +22,7 @@ func NewTrawlingManager(mlAddrs []string) *TrawlingManager {
 		manager.services = append(manager.services, mainline.NewTrawlingService(
 			addr,
 			2000,
+			interval,
 			mainline.TrawlingServiceEventHandlers{
 				OnResult: manager.onResult,
 			},

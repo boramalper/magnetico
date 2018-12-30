@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/boramalper/magnetico/pkg/util"
 	"go.uber.org/zap"
 
 	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
 	"github.com/boramalper/magnetico/pkg/persistence"
+	"github.com/boramalper/magnetico/pkg/util"
 )
 
 type Metadata struct {
@@ -26,6 +26,7 @@ type Metadata struct {
 type Sink struct {
 	PeerID               []byte
 	deadline             time.Duration
+	maxNLeeches          int
 	drain                chan Metadata
 	incomingInfoHashes   map[[20]byte]struct{}
 	incomingInfoHashesMx sync.Mutex
@@ -67,11 +68,12 @@ func randomDigit() byte {
 	return byte(rand.Intn(max-min) + min)
 }
 
-func NewSink(deadline time.Duration) *Sink {
+func NewSink(deadline time.Duration, maxNLeeches int) *Sink {
 	ms := new(Sink)
 
 	ms.PeerID = randomID()
 	ms.deadline = deadline
+	ms.maxNLeeches = maxNLeeches
 	ms.drain = make(chan Metadata)
 	ms.incomingInfoHashes = make(map[[20]byte]struct{})
 	ms.termination = make(chan interface{})
@@ -85,6 +87,11 @@ func (ms *Sink) Sink(res mainline.TrawlingResult) {
 	}
 	ms.incomingInfoHashesMx.Lock()
 	defer ms.incomingInfoHashesMx.Unlock()
+
+	// cap the max # of leeches
+	if len(ms.incomingInfoHashes) >= ms.maxNLeeches {
+		return
+	}
 
 	if _, exists := ms.incomingInfoHashes[res.InfoHash]; exists {
 		return
@@ -135,6 +142,7 @@ func (ms *Sink) flush(result Metadata) {
 
 func (ms *Sink) onLeechError(infoHash [20]byte, err error) {
 	zap.L().Debug("leech error", util.HexField("infoHash", infoHash[:]), zap.Error(err))
+
 	ms.incomingInfoHashesMx.Lock()
 	delete(ms.incomingInfoHashes, infoHash)
 	ms.incomingInfoHashesMx.Unlock()

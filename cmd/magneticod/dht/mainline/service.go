@@ -18,6 +18,7 @@ type TrawlingService struct {
 	// Private
 	protocol      *Protocol
 	started       bool
+	interval      time.Duration
 	eventHandlers TrawlingServiceEventHandlers
 
 	trueNodeID []byte
@@ -34,8 +35,9 @@ type TrawlingServiceEventHandlers struct {
 	OnResult func(TrawlingResult)
 }
 
-func NewTrawlingService(laddr string, initialMaxNeighbors uint, eventHandlers TrawlingServiceEventHandlers) *TrawlingService {
+func NewTrawlingService(laddr string, initialMaxNeighbors uint, interval time.Duration, eventHandlers TrawlingServiceEventHandlers) *TrawlingService {
 	service := new(TrawlingService)
+	service.interval = interval
 	service.protocol = NewProtocol(
 		laddr,
 		ProtocolEventHandlers{
@@ -76,7 +78,7 @@ func (s *TrawlingService) Terminate() {
 }
 
 func (s *TrawlingService) trawl() {
-	for range time.Tick(1 * time.Second) {
+	for range time.Tick(s.interval) {
 		// TODO
 		// For some reason, we can't still detect congestion and this keeps increasing...
 		// Disable for now.
