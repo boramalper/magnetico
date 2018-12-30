@@ -88,7 +88,7 @@ func (s *TrawlingService) trawl() {
 		if len(s.routingTable) == 0 {
 			s.bootstrap()
 		} else {
-			zap.L().Warn("Latest status:", zap.Int("n", len(s.routingTable)),
+			zap.L().Info("Latest status:", zap.Int("n", len(s.routingTable)),
 				zap.Uint("maxNeighbors", s.maxNeighbors))
 			s.findNeighbors()
 			s.routingTable = make(map[string]*net.UDPAddr)
