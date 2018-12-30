@@ -18,7 +18,7 @@ central entity*.
 
 ## Features
 - Easy installation & minimal requirements:
-  - Pre-compiled static binaries and Docker images are provided.
+  - [Pre-compiled static binaries](https://github.com/boramalper/magnetico/releases) and [Docker images](https://cloud.docker.com/repository/docker/boramalper/magnetico) are provided.
   - Root access is *not* required to install or to use.
 - Near-zero configuration:
   - Both programs work out of the box, and **magneticow** can be used without a web-server too.
@@ -70,6 +70,8 @@ for torrents in the network, hence removing the need for centralised torrent web
 1. Install **magneticod** first by following its [installation instructions](cmd/magneticod/README.md).
 2. Install **magneticow** afterwards by following its
    [installation instructions](cmd/magneticow/README.md).
+
+*Alternatively*, just grab it from [Docker Hub](https://cloud.docker.com/repository/docker/boramalper/magnetico)!
 
 ## License
 
