@@ -22,6 +22,7 @@ image: image-magneticod image-magneticow
 # Download dependencies
 ensure:
 	dep ensure -v
+	go get -u github.com/kevinburke/go-bindata/...
 
 vet:
 	go vet github.com/boramalper/magnetico/...

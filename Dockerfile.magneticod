@@ -18,8 +18,6 @@ ADD ./cmd/magneticod  /go/src/github.com/boramalper/magnetico/cmd/magneticod
 RUN     curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 WORKDIR /go/src/github.com/boramalper/magnetico/
 RUN     make ensure
-RUN     make test-persistence
-RUN     make test-magneticod
 RUN     make magneticod
 
 FROM alpine:latest
