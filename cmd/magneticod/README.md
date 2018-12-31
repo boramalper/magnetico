@@ -20,7 +20,7 @@ for versions from v0.7.0 onwards.
 
 ### Installing the Docker Image
 Docker images are provided on [Docker Hub](https://hub.docker.com/r/boramalper/magnetico/tags/) at
-the repository `boramalper/magnetico`. Images are tagged as `magneticod-vMAJOR.MINOR.PATCH`.
+the repository `boramalper/magnetico`. Images are tagged as `d-vMAJOR.MINOR.PATCH`.
 
 ## Setup
 1. (Optional, **requires root**) Disable iptables for a specified port:

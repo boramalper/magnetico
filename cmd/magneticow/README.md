@@ -4,6 +4,9 @@
 **magneticow** is a lightweight web interface to search and to browse the torrents that its counterpart (**magneticod**)
 discovered.
 
+See the list of [alternative front-ends](https://github.com/boramalper/magnetico/wiki/Related-Projects#alternative-front-ends)
+developed by the community if you need something more advanced or different.
+
 ## Installation
 
 ### Installing the Pre-Compiled Static Binary
@@ -12,7 +15,7 @@ for versions from v0.7.0 onwards.
 
 ### Installing the Docker Image
 Docker images are provided on [Docker Hub](https://hub.docker.com/r/boramalper/magnetico/tags/) at
-the repository `boramalper/magnetico`. Images are tagged as `magneticow-vMAJOR.MINOR.PATCH`.
+the repository `boramalper/magnetico`. Images are tagged as `w-vMAJOR.MINOR.PATCH`.
 
 ## Setup
 ### Configuration
