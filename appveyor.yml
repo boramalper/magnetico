@@ -4,7 +4,7 @@ platform: x64
 
 branches:
   only:
-    - go-rewrite
+    - master
 
 # Source Config
 clone_folder: c:\gopath\src\magnetico
@@ -13,8 +13,8 @@ shallow_clone: true
 # Build host
 environment:
   GOPATH: c:\gopath
-  GOVERSION: 1.9.2
-  DEPVERSION: 0.3.2
+  GOVERSION: 1.11
+  DEPVERSION: 0.5.0
 
 install:
   # Install the specific Go version.
@@ -25,14 +25,16 @@ install:
   - set Path=c:\go\bin;c:\gopath\bin
   - go version
   - go env
-  - go get -u github.com/jteeuwen/go-bindata/...
+  - go get -u -v github.com/kevinburke/go-bindata/...
+  - go get -u -v honnef.co/go/tools/cmd/staticcheck
 
 before_build:
-  - go-bindata -o="magneticow/bindata.go" -prefix="magneticow/data/" magneticow/data/...
+  - go-bindata -o="magneticow\bindata.go" -prefix="magneticow/data/" magneticow/data/...
   - cd c:\gopath\src\magnetico
   - c:\dep ensure -v
 
 build_script:
+  - go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" github.com/boramalper/magnetico/cmd/magneticod
   - go install magnetico/magneticod
   - go install magnetico/magneticow
 
