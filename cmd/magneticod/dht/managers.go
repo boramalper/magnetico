@@ -1,19 +1,28 @@
 package dht
 
 import (
-	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
+	"net"
 	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
 )
 
 type TrawlingManager struct {
 	// private
-	output   chan mainline.TrawlingResult
+	output   chan Result
 	services []*mainline.TrawlingService
+}
+
+type Result interface {
+	InfoHash() [20]byte
+	PeerAddr() *net.TCPAddr
 }
 
 func NewTrawlingManager(mlAddrs []string, interval time.Duration) *TrawlingManager {
 	manager := new(TrawlingManager)
-	manager.output = make(chan mainline.TrawlingResult)
+	manager.output = make(chan Result, 20)
 
 	if mlAddrs == nil {
 		mlAddrs = []string{"0.0.0.0:0"}
@@ -24,7 +33,7 @@ func NewTrawlingManager(mlAddrs []string, interval time.Duration) *TrawlingManag
 			2000,
 			interval,
 			mainline.TrawlingServiceEventHandlers{
-				OnResult: manager.onResult,
+				OnResult: manager.onTrawlingResult,
 			},
 		))
 	}
@@ -36,11 +45,15 @@ func NewTrawlingManager(mlAddrs []string, interval time.Duration) *TrawlingManag
 	return manager
 }
 
-func (m *TrawlingManager) onResult(res mainline.TrawlingResult) {
-	m.output <- res
+func (m *TrawlingManager) onTrawlingResult(res mainline.TrawlingResult) {
+	select {
+	case m.output <- res:
+	default:
+		zap.L().Warn("DHT manager output ch is full, result dropped!")
+	}
 }
 
-func (m *TrawlingManager) Output() <-chan mainline.TrawlingResult {
+func (m *TrawlingManager) Output() <-chan Result {
 	return m.output
 }
 

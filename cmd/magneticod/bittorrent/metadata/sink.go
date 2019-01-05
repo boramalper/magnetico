@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
+	"github.com/boramalper/magnetico/cmd/magneticod/dht"
 	"github.com/boramalper/magnetico/pkg/persistence"
 	"github.com/boramalper/magnetico/pkg/util"
 )
@@ -81,7 +81,10 @@ func NewSink(deadline time.Duration, maxNLeeches int) *Sink {
 	return ms
 }
 
-func (ms *Sink) Sink(res mainline.TrawlingResult) {
+func (ms *Sink) Sink(res dht.Result) {
+	infoHash := res.InfoHash()
+	peerAddr := res.PeerAddr()
+
 	if ms.terminated {
 		zap.L().Panic("Trying to Sink() an already closed Sink!")
 	}
@@ -93,7 +96,7 @@ func (ms *Sink) Sink(res mainline.TrawlingResult) {
 		return
 	}
 
-	if _, exists := ms.incomingInfoHashes[res.InfoHash]; exists {
+	if _, exists := ms.incomingInfoHashes[infoHash]; exists {
 		return
 	}
 	// BEWARE!
@@ -102,14 +105,14 @@ func (ms *Sink) Sink(res mainline.TrawlingResult) {
 	// check whether res.infoHash exists in the ms.incomingInfoHashes, and where we add the infoHash
 	// to the incomingInfoHashes at the end of this function.
 
-	zap.L().Info("Sunk!", zap.Int("leeches", len(ms.incomingInfoHashes)), util.HexField("infoHash", res.InfoHash[:]))
+	zap.L().Info("Sunk!", zap.Int("leeches", len(ms.incomingInfoHashes)), util.HexField("infoHash", infoHash[:]))
 
-	go NewLeech(res.InfoHash, res.PeerAddr, ms.PeerID, LeechEventHandlers{
+	go NewLeech(infoHash, peerAddr, ms.PeerID, LeechEventHandlers{
 		OnSuccess: ms.flush,
 		OnError:   ms.onLeechError,
 	}).Do(time.Now().Add(ms.deadline))
 
-	ms.incomingInfoHashes[res.InfoHash] = struct{}{}
+	ms.incomingInfoHashes[infoHash] = struct{}{}
 }
 
 func (ms *Sink) Drain() <-chan Metadata {

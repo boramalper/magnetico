@@ -26,7 +26,12 @@ type ProtocolEventHandlers struct {
 	OnGetPeersResponse           func(*Message, *net.UDPAddr)
 	OnFindNodeResponse           func(*Message, *net.UDPAddr)
 	OnPingORAnnouncePeerResponse func(*Message, *net.UDPAddr)
-	OnCongestion                 func()
+
+	// Added by BEP 51
+	OnSampleInfohashesQuery    func(*Message, *net.UDPAddr)
+	OnSampleInfohashesResponse func(*Message, *net.UDPAddr)
+
+	OnCongestion func()
 }
 
 func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol) {
@@ -46,7 +51,7 @@ func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol
 
 func (p *Protocol) Start() {
 	if p.started {
-		zap.L().Panic("Attempting to Start() a mainline/Transport that has been already started! (Programmer error.)")
+		zap.L().Panic("Attempting to Start() a mainline/Protocol that has been already started! (Programmer error.)")
 	}
 	p.started = true
 
@@ -55,6 +60,10 @@ func (p *Protocol) Start() {
 }
 
 func (p *Protocol) Terminate() {
+	if !p.started {
+		zap.L().Panic("Attempted to Terminate() a mainline/Protocol that has not been Start()ed! (Programmer error.)")
+	}
+
 	p.transport.Terminate()
 }
 
@@ -103,13 +112,42 @@ func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
 		case "vote":
 			// Although we are aware that such method exists, we ignore.
 
+		case "sample_infohashes": // Added by BEP 51
+			if !validateSampleInfohashesQueryMessage(msg) {
+				// zap.L().Debug("An invalid sample_infohashes query received!")
+				return
+			}
+			if p.eventHandlers.OnSampleInfohashesQuery != nil {
+				p.eventHandlers.OnSampleInfohashesQuery(msg, addr)
+			}
+
 		default:
 			// zap.L().Debug("A KRPC query of an unknown method received!", zap.String("method", msg.Q))
 			return
 		}
 	case "r":
-		// get_peers > find_node > ping / announce_peer
-		if len(msg.R.Token) != 0 { // The message should be a get_peers response.
+		// Query messages have a `q` field which indicates their type but response messages have no such field that we
+		// can rely on.
+		// The idea is you'd use transaction ID (the `t` key) to deduce the type of a response message, as it must be
+		// sent in response to a query message (with the same transaction ID) that we have sent earlier.
+		// This approach is, unfortunately, not very practical for our needs since we send up to thousands messages per
+		// second, meaning that we'd run out of transaction IDs very quickly (since some [many?] clients assume
+		// transaction IDs are no longer than 2 bytes), and we'd also then have to consider retention too (as we might
+		// not get a response at all).
+		// Our approach uses an ad-hoc pattern matching: all response messages share a subset of fields (such as `t`,
+		// `y`) but only one type of them contain a particular field (such as `token` field is unique to `get_peers`
+		// responses, `samples` is unique to `sample_infohashes` etc).
+		//
+		// sample_infohashes > get_peers > find_node > ping / announce_peer
+		if len(msg.R.Samples) != 0 { // The message should be a sample_infohashes response.
+			if !validateSampleInfohashesResponseMessage(msg) {
+				// zap.L().Debug("An invalid sample_infohashes response received!")
+				return
+			}
+			if p.eventHandlers.OnSampleInfohashesResponse != nil {
+				p.eventHandlers.OnSampleInfohashesResponse(msg, addr)
+			}
+		} else if len(msg.R.Token) != 0 { // The message should be a get_peers response.
 			if !validateGetPeersResponseMessage(msg) {
 				// zap.L().Debug("An invalid get_peers response received!")
 				return
@@ -259,6 +297,11 @@ func validateAnnouncePeerQueryMessage(msg *Message) bool {
 		len(msg.A.Token) > 0
 }
 
+func validateSampleInfohashesQueryMessage(msg *Message) bool {
+	return len(msg.A.ID) == 20 &&
+		len(msg.A.Target) == 20
+}
+
 func validatePingORannouncePeerResponseMessage(msg *Message) bool {
 	return len(msg.R.ID) == 20
 }
@@ -278,4 +321,12 @@ func validateGetPeersResponseMessage(msg *Message) bool {
 		len(msg.R.Token) > 0
 
 	// TODO: check for values or nodes
+}
+
+func validateSampleInfohashesResponseMessage(msg *Message) bool {
+	return len(msg.R.ID) == 20 &&
+		msg.R.Interval >= 0 &&
+		// TODO: check for nodes
+		msg.R.Num >= 0 &&
+		len(msg.R.Samples)%20 == 0
 }

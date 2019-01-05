@@ -9,11 +9,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type TrawlingResult struct {
-	InfoHash [20]byte
-	PeerAddr *net.TCPAddr
-}
-
 type TrawlingService struct {
 	// Private
 	protocol      *Protocol
@@ -33,6 +28,19 @@ type TrawlingService struct {
 
 type TrawlingServiceEventHandlers struct {
 	OnResult func(TrawlingResult)
+}
+
+type TrawlingResult struct {
+	infoHash [20]byte
+	peerAddr *net.TCPAddr
+}
+
+func (tr TrawlingResult) InfoHash() [20]byte {
+	return tr.infoHash
+}
+
+func (tr TrawlingResult) PeerAddr() *net.TCPAddr {
+	return tr.peerAddr
 }
 
 func NewTrawlingService(laddr string, initialMaxNeighbors uint, interval time.Duration, eventHandlers TrawlingServiceEventHandlers) *TrawlingService {
@@ -173,8 +181,8 @@ func (s *TrawlingService) onAnnouncePeerQuery(query *Message, addr *net.UDPAddr)
 	var infoHash [20]byte
 	copy(infoHash[:], query.A.InfoHash)
 	s.eventHandlers.OnResult(TrawlingResult{
-		InfoHash: infoHash,
-		PeerAddr: &net.TCPAddr{
+		infoHash: infoHash,
+		peerAddr: &net.TCPAddr{
 			IP:   addr.IP,
 			Port: peerPort,
 		},

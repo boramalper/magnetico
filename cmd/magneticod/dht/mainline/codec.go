@@ -20,7 +20,12 @@ import (
 )
 
 type Message struct {
-	// Query method (one of 4: "ping", "find_node", "get_peers", "announce_peer")
+	// Query method. One of 5:
+	//   - "ping"
+	//   - "find_node"
+	//   - "get_peers"
+	//   - "announce_peer"
+	//   - "sample_infohashes" (added by BEP 51)
 	Q string `bencode:"q,omitempty"`
 	// named QueryArguments sent with a query
 	A QueryArguments `bencode:"a,omitempty"`
@@ -73,6 +78,13 @@ type ResponseValues struct {
 	Token []byte `bencode:"token,omitempty"`
 	// Torrent peers
 	Values []CompactPeer `bencode:"values,omitempty"`
+
+	// The subset refresh interval in seconds. Added by BEP 51.
+	Interval int `bencode:"interval,omitempty"`
+	// Number of infohashes in storage. Added by BEP 51.
+	Num int `bencode:"num,omitempty"`
+	// Subset of stored infohashes, N × 20 bytes. Added by BEP 51.
+	Samples []byte `bencode:"samples,omitempty"`
 
 	// If `scrape` is set to 1 in the `get_peers` query then the responding node should add the
 	// below two fields to the "r" dictionary in the response:

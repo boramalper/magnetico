@@ -126,8 +126,10 @@ func main() {
 	for stopped := false; !stopped; {
 		select {
 		case result := <-trawlingManager.Output():
-			zap.L().Debug("Trawled!", util.HexField("infoHash", result.InfoHash[:]))
-			exists, err := database.DoesTorrentExist(result.InfoHash[:])
+			infoHash := result.InfoHash()
+
+			zap.L().Debug("Trawled!", util.HexField("infoHash", infoHash[:]))
+			exists, err := database.DoesTorrentExist(infoHash[:])
 			if err != nil {
 				zap.L().Fatal("Could not check whether torrent exists!", zap.Error(err))
 			} else if !exists {
