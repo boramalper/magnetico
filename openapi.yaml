@@ -1,0 +1,299 @@
+openapi: 3.0.0
+info:
+  title: magneticow API
+  description: REST-ful HTTP API of magneticow
+  version: v0.1
+servers:
+- url: https://virtserver.swaggerhub.com/boramalper/magneticow-api/v0
+- url: http://virtserver.swaggerhub.com/boramalper/magneticow-api/v0
+paths:
+  /torrents/:
+    get:
+      summary: Search torrents.
+      parameters:
+      - name: query
+        in: query
+        description: |
+          The query to search torrents. The query syntax depends on the database engine in-use, which should be specified by the API provider, and is by default SQLite.
+
+          - For SQLite (`sqlite3://`), see [SQLite FST5 Extension Documentation](https://sqlite.org/fts5.html#full_text_query_syntax).
+        required: true
+        style: form
+        explode: true
+        schema:
+          type: string
+      - name: epoch
+        in: query
+        description: "The time (represented in integer seconds since [UNIX\nepoch](https://en.wikipedia.org/wiki/Unix_time))\
+          \ after which no\nmodified torrents will be included in the results.\n\n\
+          It is to ensure that no torrents that are modified after the\nsearch has\
+          \ been started can disrupt the order of the results. To\nachieve it, the\
+          \ same `epoch` value must be used whilst \nbrowsing the pages.\n\nIf supplied,\
+          \ `lastID` and `lastOrderedValue` must be supplied as well.\n"
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+          format: int32
+      - name: orderBy
+        in: query
+        description: |
+          The criteria to sort the torrents by. If two given torrents are same according to a specified sorting criteria, then their order is indeterminate.
+
+          **If ommitted**, the criteria is the relevance to the `query` if `query` is not empty, else the criteria is by default `DISCOVERED_ON`.
+
+          `order_by`, if supplied, must have one of these values:
+          - `TOTAL_SIZE`
+          - `DISCOVERED_ON`
+          - `UPDATED_ON`
+          - `N_FILES`
+          - `N_SEEDERS`
+          - `N_LEECHERS`
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+          enum:
+          - TOTAL_SIZE
+          - DISCOVERED_ON
+          - UPDATED_ON
+          - N_FILES
+          - N_SEEDERS
+          - N_LEECHERS
+      - name: ascending
+        in: query
+        description: |
+          Controls whether the result should be sorted in ascending (or descending) order according to the sorting criteria.
+
+          **If ommitted**, `ascending` defaults to true.
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        description: |
+          The **maximum** number of results per page.
+          **If ommitted**, `limit` is equal to 20 by default, but the API provider can change the default value, else it must be greater than or equal to 1, and less than or equal to 100 (again, the API provider can change the boundaries).
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+          format: int32
+      - name: lastOrderedValue
+        in: query
+        description: |
+          Last ordered value for keyset pagination. If supplied, `epoch` and `lastID` must be supplied as well.
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+          format: int32
+      - name: lastID
+        in: query
+        description: |
+          Last id for keyset pagination. If supplied, `epoch` and `lastOrderedValue` must be supplied as well.
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        400:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Torrent'
+  /torrents/{infohash}:
+    get:
+      summary: Get metadata of a torrent by its infohash.
+      parameters:
+      - name: infohash
+        in: path
+        description: The infohash of the torrent whose metadata is requested, encoded in lowercase hex. Must be exactly 40 characters long.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Torrent'
+  /files/{infohash}:
+    get:
+      summary: Get the file list of a torren by its infohash.
+      parameters:
+      - name: infohash
+        in: path
+        description: The infohash of the torrent whose file list is requested, encoded in lowercase hex. Must be exactly 40 characters long.
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/File'
+  /statistics/:
+    get:
+      summary: Get the statistics.
+      description: "__Examples__\n\nTODO: update examples to use curl\n\n- Get the\
+        \ statistics about the last two years:\n  \n  ```\n  GET example.com/api/statistics?from=2018&n=2\n\
+        \  ```\n- Get the statistics about the last month:\n\n  ```\n  GET example.com/api/statistics?from=2018-04\n\
+        \  ```\n"
+      parameters:
+      - name: from
+        in: query
+        description: |
+          The date starting from which statistics in the past should be returned. Also determines the __granularity__ (*i.e.* grouping)
+          of the data-points.
+
+          Must be in one of the following formats:
+
+          - __Year__
+            - `YYYY` - Year (*e.g.* `2018`)
+          - __Month__
+            - `YYYY-MM` - Month of a Year (*e.g.* `2018-04`)
+          - __Week__
+            - `YYYY-Www` - Week of a Year (*e.g.* `2018-W16`)
+          - __Day__
+            - `YYYY-Www-D` - Day of a Week of a Year (*e.g.* `2018-W16-1`)
+            - `YYYY-MM-DD` - Day of a Month of a Year (*e.g.* `2018-04-16`)
+          - __Hour__
+            - `YYYY-Www-DThh` - Hour of a Day of a Week of a Year (*e.g.* `2018-W16-1T13`)
+            - `YYYY-MM-DDThh` - Hour of a Day of a Month of a Year (*e.g.* `2018-04-16T13`)
+        required: true
+        style: form
+        explode: true
+        schema:
+          pattern: ^(?:(?:(\d{4}))|(?:(\d{4})-(\d{2}))|(?:(\d{4})-W(\d{2}))|(?:(\d{4})-W(\d{2})-(\d))|(?:(\d{4})-(\d{2})-(\d{2}))|(?:(\d{4})-(\d{2})-(\d{2})T(\d{2}))|(?:(\d{4})-W(\d{2})-(\d)T(\d{2})))$
+          type: string
+      - name: n
+        in: query
+        description: |
+          Number of data points. It must be a positive number. By default 1.
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Statistics'
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: an exemplary error message.
+    Statistics:
+      type: object
+      properties:
+        nDiscovered:
+          minItems: 1
+          type: array
+          example:
+          - 10123
+          - 200
+          - 180893
+          items:
+            type: integer
+            format: int32
+        nFiles:
+          minItems: 1
+          type: array
+          example:
+          - 20321
+          - 372
+          - 418923
+          items:
+            type: integer
+            format: int32
+        totalSize:
+          minItems: 1
+          type: array
+          example:
+          - 42616225792
+          - 780140544
+          - 878545207296
+          items:
+            type: integer
+            format: int32
+      xml:
+        name: Statistics
+    File:
+      type: object
+      properties:
+        path:
+          type: string
+          example: ubuntu-16.04.4-desktop-amd64.iso
+        size:
+          type: integer
+          format: int32
+          example: 1572864
+      xml:
+        name: File
+    Torrent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 7
+        infoHash:
+          type: string
+          example: 778ce280b595e57780ff083f2eb6f897dfa4a4ee
+        name:
+          type: string
+          example: ubuntu-16.04.4-desktop-amd64.iso
+        nFiles:
+          type: integer
+          format: int32
+          example: 1
+        size:
+          type: integer
+          format: int32
+          example: 1572864
+        discoveredOn:
+          type: integer
+          format: int32
+          example: 1459468800
+        relevance:
+          type: number
+          example: -0.3232
+      xml:
+        name: Torrent
