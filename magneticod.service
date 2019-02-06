@@ -1,0 +1,9 @@
+[Unit]
+Description=magneticod
+
+[Service]
+ExecStart=/usr/bin/magneticod -v
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
