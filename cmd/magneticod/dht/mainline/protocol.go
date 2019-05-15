@@ -204,14 +204,32 @@ func NewFindNodeQuery(id []byte, target []byte) *Message {
 	}
 }
 
-func NewGetPeersQuery(id []byte, info_hash []byte) *Message {
+func NewGetPeersQuery(id []byte, infoHash []byte) *Message {
+	return &Message{
+		Y: "q",
+		T: []byte("aa"),
+		Q: "get_peers",
+		A: QueryArguments{
+			ID:       id,
+			InfoHash: infoHash,
+		},
+	}
+}
+
+func NewAnnouncePeerQuery(id []byte, implied_port bool, info_hash []byte, port uint16, token []byte) *Message {
 	panic("Not implemented yet!")
 }
 
-func NewAnnouncePeerQuery(id []byte, implied_port bool, info_hash []byte, port uint16,
-	token []byte) *Message {
-
-	panic("Not implemented yet!")
+func NewSampleInfohashesQuery(id []byte, t []byte, target []byte) *Message {
+	return &Message{
+		Y: "q",
+		T: t,
+		Q: "sample_infohashes",
+		A: QueryArguments {
+			ID: id,
+			Target: target,
+		},
+	}
 }
 
 func NewPingResponse(t []byte, id []byte) *Message {

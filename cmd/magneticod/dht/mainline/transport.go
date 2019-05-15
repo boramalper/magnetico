@@ -150,8 +150,10 @@ func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 		 *
 		 * Source: https://docs.python.org/3/library/asyncio-protocol.html#flow-control-callbacks
 		 */
-		zap.L().Warn("WRITE CONGESTION!", zap.Error(err))
-		t.onCongestion()
+		//zap.L().Warn("WRITE CONGESTION!", zap.Error(err))
+		if t.onCongestion != nil {
+			t.onCongestion()
+		}
 	} else if err != nil {
 		zap.L().Warn("Could NOT write an UDP packet!", zap.Error(err))
 	}

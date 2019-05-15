@@ -117,7 +117,7 @@ func main() {
 		logger.Sugar().Fatalf("Could not open the database at `%s`", opFlags.DatabaseURL, zap.Error(err))
 	}
 
-	trawlingManager := dht.NewTrawlingManager(opFlags.TrawlerMlAddrs, opFlags.TrawlerMlInterval)
+	trawlingManager := dht.NewTrawlingManager(nil, []string{"0.0.0.0:0"}, opFlags.TrawlerMlInterval)
 	metadataSink := metadata.NewSink(2*time.Minute, opFlags.LeechMaxN)
 
 	zap.L().Debug("Peer ID", zap.ByteString("peerID", metadataSink.PeerID))
@@ -161,7 +161,7 @@ func parseFlags() (*opFlags, error) {
 		TrawlerMlAddrs    []string `long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
 		TrawlerMlInterval uint     `long:"trawler-ml-interval" description:"Trawling interval in integer seconds."`
 
-		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"1000"`
+		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"100"`
 
 		Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
 		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`

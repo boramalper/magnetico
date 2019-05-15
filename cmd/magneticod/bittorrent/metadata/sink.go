@@ -105,7 +105,7 @@ func (ms *Sink) Sink(res dht.Result) {
 	// check whether res.infoHash exists in the ms.incomingInfoHashes, and where we add the infoHash
 	// to the incomingInfoHashes at the end of this function.
 
-	zap.L().Info("Sunk!", zap.Int("leeches", len(ms.incomingInfoHashes)), util.HexField("infoHash", infoHash[:]))
+	zap.L().Debug("Sunk!", zap.Int("leeches", len(ms.incomingInfoHashes)), util.HexField("infoHash", infoHash[:]))
 
 	go NewLeech(infoHash, peerAddr, ms.PeerID, LeechEventHandlers{
 		OnSuccess: ms.flush,

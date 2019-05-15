@@ -11,8 +11,9 @@ import (
 
 type TrawlingManager struct {
 	// private
-	output   chan Result
-	services []*mainline.TrawlingService
+	output           chan Result
+	trawlingServices []*mainline.TrawlingService
+	indexingServices []*mainline.IndexingService
 }
 
 type Result interface {
@@ -20,25 +21,30 @@ type Result interface {
 	PeerAddr() *net.TCPAddr
 }
 
-func NewTrawlingManager(mlAddrs []string, interval time.Duration) *TrawlingManager {
+func NewTrawlingManager(tsAddrs []string, isAddrs []string, interval time.Duration) *TrawlingManager {
 	manager := new(TrawlingManager)
 	manager.output = make(chan Result, 20)
 
-	if mlAddrs == nil {
-		mlAddrs = []string{"0.0.0.0:0"}
-	}
-	for _, addr := range mlAddrs {
-		manager.services = append(manager.services, mainline.NewTrawlingService(
+	// Trawling Services
+	for _, addr := range tsAddrs {
+		service := mainline.NewTrawlingService(
 			addr,
 			2000,
 			interval,
 			mainline.TrawlingServiceEventHandlers{
 				OnResult: manager.onTrawlingResult,
 			},
-		))
+		)
+		manager.trawlingServices = append(manager.trawlingServices, service)
+		service.Start()
 	}
 
-	for _, service := range manager.services {
+	// Indexing Services
+	for _, addr := range isAddrs {
+		service := mainline.NewIndexingService(addr, 2 * time.Second, mainline.IndexingServiceEventHandlers{
+			OnResult: manager.onIndexingResult,
+		})
+		manager.indexingServices = append(manager.indexingServices, service)
 		service.Start()
 	}
 
@@ -49,7 +55,17 @@ func (m *TrawlingManager) onTrawlingResult(res mainline.TrawlingResult) {
 	select {
 	case m.output <- res:
 	default:
-		zap.L().Warn("DHT manager output ch is full, result dropped!")
+		// TODO: should be a warn
+		zap.L().Debug("DHT manager output ch is full, result dropped!")
+	}
+}
+
+func (m *TrawlingManager) onIndexingResult(res mainline.IndexingResult) {
+	select {
+	case m.output <- res:
+	default:
+		// TODO: should be a warn
+		zap.L().Debug("DHT manager output ch is full, idx result dropped!")
 	}
 }
 
@@ -58,7 +74,7 @@ func (m *TrawlingManager) Output() <-chan Result {
 }
 
 func (m *TrawlingManager) Terminate() {
-	for _, service := range m.services {
+	for _, service := range m.trawlingServices {
 		service.Terminate()
 	}
 }

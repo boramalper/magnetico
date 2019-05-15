@@ -1,7 +1,7 @@
 package mainline
 
 import (
-	"crypto/rand"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
