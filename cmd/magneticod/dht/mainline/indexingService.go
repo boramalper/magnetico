@@ -34,16 +34,16 @@ type IndexingServiceEventHandlers struct {
 }
 
 type IndexingResult struct {
-	infoHash [20]byte
-	peerAddr *net.TCPAddr
+	infoHash  [20]byte
+	peerAddrs []net.TCPAddr
 }
 
 func (ir IndexingResult) InfoHash() [20]byte {
 	return ir.infoHash
 }
 
-func (ir IndexingResult) PeerAddr() *net.TCPAddr {
-	return ir.peerAddr
+func (ir IndexingResult) PeerAddrs() []net.TCPAddr {
+	return ir.peerAddrs
 }
 
 func NewIndexingService(laddr string, interval time.Duration, eventHandlers IndexingServiceEventHandlers) *IndexingService {
@@ -86,11 +86,6 @@ func (is *IndexingService) Terminate() {
 
 func (is *IndexingService) index() {
 	for range time.Tick(is.interval) {
-		// TODO
-		// For some reason, we can't still detect congestion and this keeps increasing...
-		// Disable for now.
-		// s.maxNeighbors = uint(float32(s.maxNeighbors) * 1.001)
-
 		is.routingTableMutex.Lock()
 		if len(is.routingTable) == 0 {
 			is.bootstrap()
@@ -190,15 +185,22 @@ func (is *IndexingService) onGetPeersResponse(msg *Message, addr *net.UDPAddr) {
 		return
 	}
 
+	peerAddrs := make([]net.TCPAddr, 0)
 	for _, peer := range msg.R.Values {
-		is.eventHandlers.OnResult(IndexingResult{
-			infoHash: infoHash,
-			peerAddr: &net.TCPAddr{
-				IP:   peer.IP,
-				Port: peer.Port,
-			},
+		if peer.Port == 0 {
+			continue
+		}
+
+		peerAddrs = append(peerAddrs, net.TCPAddr{
+			IP:   peer.IP,
+			Port: peer.Port,
 		})
 	}
+
+	is.eventHandlers.OnResult(IndexingResult{
+		infoHash:  infoHash,
+		peerAddrs: peerAddrs,
+	})
 }
 
 func (is *IndexingService) onSampleInfohashesResponse(msg *Message, addr *net.UDPAddr) {

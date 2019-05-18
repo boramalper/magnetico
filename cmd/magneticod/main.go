@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/pprof"
 	"time"
 
@@ -27,8 +28,8 @@ import (
 type opFlags struct {
 	DatabaseURL string
 
-	TrawlerMlAddrs    []string
-	TrawlerMlInterval time.Duration
+	IndexerAddrs    []string
+	IndexerInterval time.Duration
 
 	LeechMaxN int
 
@@ -46,11 +47,7 @@ func main() {
 		zapcore.Lock(os.Stderr),
 		loggerLevel,
 	))
-	defer func() {
-		if err := logger.Sync(); err != nil {
-			panic(err)
-		}
-	}()
+	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
 
 	// opFlags is the "operational flags"
@@ -60,8 +57,8 @@ func main() {
 		return
 	}
 
-	zap.L().Info("magneticod v0.7.2 has been started.")
-	zap.L().Info("Copyright (C) 2018  Mert Bora ALPER <bora@boramalper.org>.")
+	zap.L().Info("magneticod v0.8.0 has been started.")
+	zap.L().Info("Copyright (C) 2017-2019  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 	zap.S().Infof("Compiled on %s", compiledOn)
 
@@ -77,8 +74,7 @@ func main() {
 
 	zap.ReplaceGlobals(logger)
 
-	switch opFlags.Profile {
-	case "cpu":
+	if opFlags.Profile == "cpu" {
 		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE|os.O_WRONLY, 0755)
 		if err != nil {
 			zap.L().Panic("Could not open the cpu profile file!", zap.Error(err))
@@ -97,12 +93,6 @@ func main() {
 			}
 		}()
 		defer pprof.StopCPUProfile()
-
-	case "memory":
-		zap.L().Panic("NOT IMPLEMENTED")
-
-	case "trace":
-		zap.L().Panic("NOT IMPLEMENTED")
 	}
 
 	// Initialise the random number generator
@@ -117,8 +107,8 @@ func main() {
 		logger.Sugar().Fatalf("Could not open the database at `%s`", opFlags.DatabaseURL, zap.Error(err))
 	}
 
-	trawlingManager := dht.NewTrawlingManager(nil, []string{"0.0.0.0:0"}, opFlags.TrawlerMlInterval)
-	metadataSink := metadata.NewSink(2*time.Minute, opFlags.LeechMaxN)
+	trawlingManager := dht.NewTrawlingManager(opFlags.IndexerAddrs, opFlags.IndexerInterval)
+	metadataSink := metadata.NewSink(5*time.Second, opFlags.LeechMaxN)
 
 	zap.L().Debug("Peer ID", zap.ByteString("peerID", metadataSink.PeerID))
 
@@ -144,6 +134,23 @@ func main() {
 			zap.L().Info("Fetched!", zap.String("name", md.Name), util.HexField("infoHash", md.InfoHash))
 
 		case <-interruptChan:
+			if opFlags.Profile == "heap" {
+				file, err := os.OpenFile("magneticod_heap.prof", os.O_CREATE|os.O_WRONLY, 0755)
+				if err != nil {
+					zap.L().Panic("Could not open the memory profile file!", zap.Error(err))
+				}
+				runtime.GC() // get up-to-date statistics
+				if err = pprof.WriteHeapProfile(file); err != nil {
+					zap.L().Fatal("Could not write heap profile!", zap.Error(err))
+				}
+				if err = file.Sync(); err != nil {
+					zap.L().Fatal("Could not sync profiling file!", zap.Error(err))
+				}
+				if err = file.Close(); err != nil {
+					zap.L().Fatal("Could not close profiling file!", zap.Error(err))
+				}
+			}
+
 			trawlingManager.Terminate()
 			stopped = true
 		}
@@ -158,13 +165,13 @@ func parseFlags() (*opFlags, error) {
 	var cmdF struct {
 		DatabaseURL string `long:"database" description:"URL of the database."`
 
-		TrawlerMlAddrs    []string `long:"trawler-ml-addr" description:"Address(es) to be used by trawling DHT (Mainline) nodes." default:"0.0.0.0:0"`
-		TrawlerMlInterval uint     `long:"trawler-ml-interval" description:"Trawling interval in integer seconds."`
+		IndexerAddrs    []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0"`
+		IndexerInterval uint     `long:"indexer-interval" description:"Indexing interval in integer seconds."`
 
-		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"100"`
+		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"200"`
 
 		Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
-		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory" choice:"trace"`
+		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"heap"`
 	}
 
 	opF := new(opFlags)
@@ -187,16 +194,16 @@ func parseFlags() (*opFlags, error) {
 		opF.DatabaseURL = cmdF.DatabaseURL
 	}
 
-	if err = checkAddrs(cmdF.TrawlerMlAddrs); err != nil {
+	if err = checkAddrs(cmdF.IndexerAddrs); err != nil {
 		zap.S().Fatalf("Of argument (list) `trawler-ml-addr`", zap.Error(err))
 	} else {
-		opF.TrawlerMlAddrs = cmdF.TrawlerMlAddrs
+		opF.IndexerAddrs = cmdF.IndexerAddrs
 	}
 
-	if cmdF.TrawlerMlInterval == 0 {
-		opF.TrawlerMlInterval = 1 * time.Second
+	if cmdF.IndexerInterval == 0 {
+		opF.IndexerInterval = 2 * time.Second
 	} else {
-		opF.TrawlerMlInterval = time.Duration(cmdF.TrawlerMlInterval) * time.Second
+		opF.IndexerInterval = time.Duration(cmdF.IndexerInterval) * time.Second
 	}
 
 	opF.LeechMaxN = int(cmdF.LeechMaxN)

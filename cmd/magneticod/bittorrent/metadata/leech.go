@@ -234,10 +234,11 @@ func (l *Leech) readUmMessage() ([]byte, error) {
 func (l *Leech) connect(deadline time.Time) error {
 	var err error
 
-	l.conn, err = net.DialTCP("tcp4", nil, l.peerAddr)
+	x, err := net.DialTimeout("tcp4", l.peerAddr.String(), 1*time.Second)
 	if err != nil {
 		return errors.Wrap(err, "dial")
 	}
+	l.conn = x.(*net.TCPConn)
 
 	// > If sec == 0, operating system discards any unsent or unacknowledged data [after Close()
 	// > has been called].
@@ -247,22 +248,6 @@ func (l *Leech) connect(deadline time.Time) error {
 			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
 		}
 		return errors.Wrap(err, "SetLinger")
-	}
-
-	err = l.conn.SetKeepAlive(true)
-	if err != nil {
-		if err := l.conn.Close(); err != nil {
-			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
-		}
-		return errors.Wrap(err, "SetKeepAlive")
-	}
-
-	err = l.conn.SetKeepAlivePeriod(10 * time.Second)
-	if err != nil {
-		if err := l.conn.Close(); err != nil {
-			zap.L().Panic("couldn't close leech connection!", zap.Error(err))
-		}
-		return errors.Wrap(err, "SetKeepAlivePeriod")
 	}
 
 	err = l.conn.SetNoDelay(true)

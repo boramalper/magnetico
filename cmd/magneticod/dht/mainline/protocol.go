@@ -225,8 +225,8 @@ func NewSampleInfohashesQuery(id []byte, t []byte, target []byte) *Message {
 		Y: "q",
 		T: t,
 		Q: "sample_infohashes",
-		A: QueryArguments {
-			ID: id,
+		A: QueryArguments{
+			ID:     id,
 			Target: target,
 		},
 	}

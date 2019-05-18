@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"math/rand"
+	"net"
 	"sync"
 	"time"
 
@@ -24,14 +25,18 @@ type Metadata struct {
 }
 
 type Sink struct {
-	PeerID               []byte
-	deadline             time.Duration
-	maxNLeeches          int
-	drain                chan Metadata
-	incomingInfoHashes   map[[20]byte]struct{}
+	PeerID      []byte
+	deadline    time.Duration
+	maxNLeeches int
+	drain       chan Metadata
+
+	incomingInfoHashes   map[[20]byte][]net.TCPAddr
 	incomingInfoHashesMx sync.Mutex
-	terminated           bool
-	termination          chan interface{}
+
+	terminated  bool
+	termination chan interface{}
+
+	deleted int
 }
 
 func randomID() []byte {
@@ -52,7 +57,7 @@ func randomID() []byte {
 	 *  - Last two digits for the minor version number
 	 *  - Patch version number is not encoded.
 	 */
-	prefix := []byte("-MC0007-")
+	prefix := []byte("-MC0008-")
 
 	var rando []byte
 	for i := 20 - len(prefix); i >= 0; i-- {
@@ -74,17 +79,28 @@ func NewSink(deadline time.Duration, maxNLeeches int) *Sink {
 	ms.PeerID = randomID()
 	ms.deadline = deadline
 	ms.maxNLeeches = maxNLeeches
-	ms.drain = make(chan Metadata)
-	ms.incomingInfoHashes = make(map[[20]byte]struct{})
+	ms.drain = make(chan Metadata, 10)
+	ms.incomingInfoHashes = make(map[[20]byte][]net.TCPAddr)
 	ms.termination = make(chan interface{})
+
+	go func() {
+		for range time.Tick(deadline) {
+			ms.incomingInfoHashesMx.Lock()
+			l := len(ms.incomingInfoHashes)
+			ms.incomingInfoHashesMx.Unlock()
+			zap.L().Info("Sink status",
+				zap.Int("activeLeeches", l),
+				zap.Int("nDeleted", ms.deleted),
+				zap.Int("drainQueue", len(ms.drain)),
+			)
+			ms.deleted = 0
+		}
+	}()
 
 	return ms
 }
 
 func (ms *Sink) Sink(res dht.Result) {
-	infoHash := res.InfoHash()
-	peerAddr := res.PeerAddr()
-
 	if ms.terminated {
 		zap.L().Panic("Trying to Sink() an already closed Sink!")
 	}
@@ -96,23 +112,22 @@ func (ms *Sink) Sink(res dht.Result) {
 		return
 	}
 
+	infoHash := res.InfoHash()
+	peerAddrs := res.PeerAddrs()
+
 	if _, exists := ms.incomingInfoHashes[infoHash]; exists {
 		return
+	} else if len(peerAddrs) > 0 {
+		peer := peerAddrs[0]
+		ms.incomingInfoHashes[infoHash] = peerAddrs[1:]
+
+		go NewLeech(infoHash, &peer, ms.PeerID, LeechEventHandlers{
+			OnSuccess: ms.flush,
+			OnError:   ms.onLeechError,
+		}).Do(time.Now().Add(ms.deadline))
 	}
-	// BEWARE!
-	// Although not crucial, the assumption is that Sink.Sink() will be called by only one
-	// goroutine (i.e. it's not thread-safe), lest there might be a race condition between where we
-	// check whether res.infoHash exists in the ms.incomingInfoHashes, and where we add the infoHash
-	// to the incomingInfoHashes at the end of this function.
 
 	zap.L().Debug("Sunk!", zap.Int("leeches", len(ms.incomingInfoHashes)), util.HexField("infoHash", infoHash[:]))
-
-	go NewLeech(infoHash, peerAddr, ms.PeerID, LeechEventHandlers{
-		OnSuccess: ms.flush,
-		OnError:   ms.onLeechError,
-	}).Do(time.Now().Add(ms.deadline))
-
-	ms.incomingInfoHashes[infoHash] = struct{}{}
 }
 
 func (ms *Sink) Drain() <-chan Metadata {
@@ -136,17 +151,29 @@ func (ms *Sink) flush(result Metadata) {
 	ms.drain <- result
 	// Delete the infoHash from ms.incomingInfoHashes ONLY AFTER once we've flushed the
 	// metadata!
+	ms.incomingInfoHashesMx.Lock()
+	defer ms.incomingInfoHashesMx.Unlock()
+
 	var infoHash [20]byte
 	copy(infoHash[:], result.InfoHash)
-	ms.incomingInfoHashesMx.Lock()
 	delete(ms.incomingInfoHashes, infoHash)
-	ms.incomingInfoHashesMx.Unlock()
 }
 
 func (ms *Sink) onLeechError(infoHash [20]byte, err error) {
 	zap.L().Debug("leech error", util.HexField("infoHash", infoHash[:]), zap.Error(err))
 
 	ms.incomingInfoHashesMx.Lock()
-	delete(ms.incomingInfoHashes, infoHash)
-	ms.incomingInfoHashesMx.Unlock()
+	defer ms.incomingInfoHashesMx.Unlock()
+
+	if len(ms.incomingInfoHashes[infoHash]) > 0 {
+		peer := ms.incomingInfoHashes[infoHash][0]
+		ms.incomingInfoHashes[infoHash] = ms.incomingInfoHashes[infoHash][1:]
+		go NewLeech(infoHash, &peer, ms.PeerID, LeechEventHandlers{
+			OnSuccess: ms.flush,
+			OnError:   ms.onLeechError,
+		}).Do(time.Now().Add(ms.deadline))
+	} else {
+		ms.deleted++
+		delete(ms.incomingInfoHashes, infoHash)
+	}
 }
