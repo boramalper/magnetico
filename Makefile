@@ -20,17 +20,17 @@ image-magneticow:
 image: image-magneticod image-magneticow
 
 vet:
-	go vet github.com/boramalper/magnetico/...
+	go vet ./...
 
 staticcheck:
-	staticcheck github.com/boramalper/magnetico/...
+	staticcheck ./...
 
 test:
-	go test github.com/boramalper/magnetico/...
+	go test ./...
 
 format:
-	gofmt -w ${GOPATH}/src/github.com/boramalper/magnetico/cmd/
-	gofmt -w ${GOPATH}/src/github.com/boramalper/magnetico/pkg/
+	gofmt -w ./cmd/
+	gofmt -w ./pkg/
 
 # Formatting Errors
 #     Since gofmt returns zero even if there are files to be formatted, we use:
@@ -46,5 +46,5 @@ format:
 #
 check-formatting: SHELL:=/bin/bash   # HERE: this is setting the shell for check-formatting only
 check-formatting:
-	! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/cmd/ 2>&1 | tee /dev/fd/2 | read
-	! gofmt -l ${GOPATH}/src/github.com/boramalper/magnetico/pkg/ 2>&1 | tee /dev/fd/2 | read
+	! gofmt -l ./cmd/ 2>&1 | tee /dev/fd/2 | read
+	! gofmt -l ./pkg/ 2>&1 | tee /dev/fd/2 | read
