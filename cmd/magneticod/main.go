@@ -5,24 +5,22 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
-	"runtime/pprof"
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/pkg/profile"
 
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/boramalper/magnetico/pkg/util"
+	"github.com/Wessie/appdirs"
 
 	"github.com/boramalper/magnetico/cmd/magneticod/bittorrent/metadata"
 	"github.com/boramalper/magnetico/cmd/magneticod/dht"
 
-	"github.com/Wessie/appdirs"
-
 	"github.com/boramalper/magnetico/pkg/persistence"
+	"github.com/boramalper/magnetico/pkg/util"
 )
 
 type opFlags struct {
@@ -74,25 +72,16 @@ func main() {
 
 	zap.ReplaceGlobals(logger)
 
-	if opFlags.Profile == "cpu" {
-		file, err := os.OpenFile("magneticod_cpu.prof", os.O_CREATE|os.O_WRONLY, 0755)
-		if err != nil {
-			zap.L().Panic("Could not open the cpu profile file!", zap.Error(err))
-		}
-		if err = pprof.StartCPUProfile(file); err != nil {
-			zap.L().Fatal("Could not start CPU profiling!", zap.Error(err))
-		}
-		defer func() {
-			if err = file.Sync(); err != nil {
-				zap.L().Fatal("Could not sync profiling file!", zap.Error(err))
-			}
-		}()
-		defer func() {
-			if err = file.Close(); err != nil {
-				zap.L().Fatal("Could not close profiling file!", zap.Error(err))
-			}
-		}()
-		defer pprof.StopCPUProfile()
+	switch opFlags.Profile {
+	case "cpu":
+		defer profile.Start(profile.CPUProfile, profile.ProfilePath("."), profile.NoShutdownHook).Stop()
+	case "memory":
+		defer profile.Start(
+			profile.MemProfile,
+			profile.ProfilePath("."),
+			profile.NoShutdownHook,
+			profile.MemProfileRate(1),
+		).Stop()
 	}
 
 	// Initialise the random number generator
@@ -109,8 +98,6 @@ func main() {
 
 	trawlingManager := dht.NewTrawlingManager(opFlags.IndexerAddrs, opFlags.IndexerInterval)
 	metadataSink := metadata.NewSink(5*time.Second, opFlags.LeechMaxN)
-
-	zap.L().Debug("Peer ID", zap.ByteString("peerID", metadataSink.PeerID))
 
 	// The Event Loop
 	for stopped := false; !stopped; {
@@ -134,23 +121,6 @@ func main() {
 			zap.L().Info("Fetched!", zap.String("name", md.Name), util.HexField("infoHash", md.InfoHash))
 
 		case <-interruptChan:
-			if opFlags.Profile == "heap" {
-				file, err := os.OpenFile("magneticod_heap.prof", os.O_CREATE|os.O_WRONLY, 0755)
-				if err != nil {
-					zap.L().Panic("Could not open the memory profile file!", zap.Error(err))
-				}
-				runtime.GC() // get up-to-date statistics
-				if err = pprof.WriteHeapProfile(file); err != nil {
-					zap.L().Fatal("Could not write heap profile!", zap.Error(err))
-				}
-				if err = file.Sync(); err != nil {
-					zap.L().Fatal("Could not sync profiling file!", zap.Error(err))
-				}
-				if err = file.Close(); err != nil {
-					zap.L().Fatal("Could not close profiling file!", zap.Error(err))
-				}
-			}
-
 			trawlingManager.Terminate()
 			stopped = true
 		}
@@ -171,7 +141,7 @@ func parseFlags() (*opFlags, error) {
 		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"200"`
 
 		Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
-		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"heap"`
+		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory"`
 	}
 
 	opF := new(opFlags)
