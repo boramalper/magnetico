@@ -1,4 +1,4 @@
-.PHONY: test format vet staticcheck magneticod magneticow ensure image image-magneticow image-magneticod
+.PHONY: test format vet staticcheck magneticod magneticow image image-magneticow image-magneticod
 
 all: test magneticod magneticow
 
@@ -18,11 +18,6 @@ image-magneticow:
 	docker build -t magneticow -f Dockerfile.magneticow .
 
 image: image-magneticod image-magneticow
-
-# Download dependencies
-ensure:
-	dep ensure -v
-	go get -u github.com/kevinburke/go-bindata/...
 
 vet:
 	go vet github.com/boramalper/magnetico/...

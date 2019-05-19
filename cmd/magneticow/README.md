@@ -8,14 +8,13 @@ See the list of [alternative front-ends](https://github.com/boramalper/magnetico
 developed by the community if you need something more advanced or different.
 
 ## Installation
-
 ### Installing the Pre-Compiled Static Binary
 You can find the latest pre-compiled static binaries on [GitHub](https://github.com/boramalper/magnetico/releases)
 for versions from v0.7.0 onwards. 
 
 ### Installing the Docker Image
-Docker images are provided on [Docker Hub](https://hub.docker.com/r/boramalper/magnetico/tags/) at
-the repository `boramalper/magnetico`. Images are tagged as `w-vMAJOR.MINOR.PATCH`.
+Docker images are provided on [Docker Hub](https://hub.docker.com/u/boramalper) at
+the repositories `boramalper/magneticod` and `boramalper/magneticow`.
 
 ## Setup
 ### Configuration

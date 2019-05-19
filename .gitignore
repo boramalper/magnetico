@@ -2,6 +2,7 @@ vendor/
 .idea/
 Gopkg.lock
 cmd/magneticow/bindata.go
+go.sum
 
 
 # Created by https://www.gitignore.io/api/go,linux,macos,windows

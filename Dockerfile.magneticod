@@ -1,28 +1,24 @@
-# Source: https://blog.golang.org/docker
-
 # Start from a Debian image with the latest version of Go installed
 # and a workspace (GOPATH) configured at /go.
-FROM golang:1.11-alpine AS build
+FROM golang:1.12-alpine AS build
 
 RUN apk add --no-cache build-base curl git
 
 # Copy the local package files to the container's workspace.
-ADD ./Gopkg.toml      /go/src/github.com/boramalper/magnetico/
-ADD ./Makefile        /go/src/github.com/boramalper/magnetico/
-ADD ./pkg             /go/src/github.com/boramalper/magnetico/pkg
-ADD ./cmd/magneticod  /go/src/github.com/boramalper/magnetico/cmd/magneticod
+ADD ./Makefile        /magnetico/
+ADD ./pkg             /magnetico/pkg
+ADD ./go.mod          /magnetico/go.mod
+ADD ./cmd/magneticod  /magnetico/cmd/magneticod
 
-# Build the outyet command inside the container.
-# (You may fetch or manage dependencies here,
-# either manually or with a tool like "godep".)
-RUN     curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-WORKDIR /go/src/github.com/boramalper/magnetico/
-RUN     make ensure
+WORKDIR /magnetico/
 RUN     make magneticod
 
 FROM alpine:latest
+LABEL maintainer="bora@boramalper.org"
 WORKDIR /
 COPY --from=build /go/bin/magneticod /magneticod
 
-# Run the outyet command by default when the container starts.
+RUN adduser -D -S magnetico
+USER magnetico
+
 ENTRYPOINT ["/magneticod"]
