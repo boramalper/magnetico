@@ -94,7 +94,8 @@ func (t *Transport) readMessages() {
 			zap.L().Warn("READ CONGESTION!", zap.Error(err))
 			t.onCongestion()
 		} else if err != nil {
-			zap.L().Warn("Could NOT read an UDP packet!", zap.Error(err))
+			// Socket is probably closed
+			break
 		}
 
 		if n == 0 {
