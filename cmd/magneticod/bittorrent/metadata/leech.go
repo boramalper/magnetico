@@ -184,6 +184,14 @@ func (l *Leech) readMessage() ([]byte, error) {
 
 	rLength := uint(binary.BigEndian.Uint32(rLengthB))
 
+	// Some malicious/faulty peers say that they are sending a very long
+	// message, and hence causing us to run out of memory.
+	// This is a crude check that does not let it happen (i.e. boundary can probably be
+	// tightened a lot more.)
+	if rLength > MAX_METADATA_SIZE {
+		return nil, errors.New("message is longer than max allowed metadata size")
+	}
+
 	rMessage, err := l.readExactly(rLength)
 	if err != nil {
 		return nil, errors.Wrap(err, "readExactly rMessage")
