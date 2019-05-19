@@ -49,6 +49,12 @@ body {
     line-height: 1.45;
 }
 
+@media only screen and (max-device-width: 800px) {
+    body {
+        padding: 1em 1em 1em 1em;
+    }
+}
+
 b {
     font-weight: bold;
 }

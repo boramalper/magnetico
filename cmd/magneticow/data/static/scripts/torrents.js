@@ -67,8 +67,8 @@ function load() {
     button.textContent = "Loading More Results...";
     button.setAttribute("disabled", "");  // disable the button whilst loading...
 
-    const tbody    = document.getElementsByTagName("tbody")[0];
-    const template = document.getElementById("row-template").innerHTML;
+    const ul       = document.querySelector("main ul");
+    const template = document.getElementById("item-template").innerHTML;
     const reqURL   = "/api/v0.1/torrents?" + encodeQueryData({
         query           : query,
         epoch           : epoch,
@@ -110,7 +110,7 @@ function load() {
                 year: "numeric"
             });
 
-            tbody.innerHTML += Mustache.render(template, t);
+            ul.innerHTML += Mustache.render(template, t);
         }
     };
 

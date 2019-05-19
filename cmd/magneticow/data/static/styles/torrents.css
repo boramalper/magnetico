@@ -10,6 +10,11 @@ header {
     margin-bottom: 0.833em;
 }
 
+@media only screen and (max-device-width: 800px) {
+    header {
+        flex-direction: column;
+    }
+}
 
 header div a {
     text-decoration: none;
@@ -62,82 +67,23 @@ footer button:nth-child(2) {
     margin-left: 0.833em;
 }
 
-
-table {
-    width: 100%;
+ul li {
+    border: 1px solid;
+    padding: 0.5em 0.5em 0.5em 0.5em;
+    margin-bottom: 0.5em;
 }
 
-
-th {
-    font-weight: bold;
-    text-align: left;
+ul li div {
+    margin-bottom: 0.25em;
 }
 
-
-tbody td, thead th {
-    padding-left: 0.833em;
-    padding-right: 0.833em;
-
-    white-space: nowrap;
+ul li div h3 {
+    margin: 0;
 }
 
-
-thead th:nth-child(1) {  /* magnet link */
-    width: 12px;
-}
-
-
-thead th:nth-child(2) {  /* name */
-    max-width: 0;
-    text-overflow: ellipsis;
-    overflow: hidden;
-}
-
-
-thead th:nth-child(3) {  /* size */
-    width: 75px;
-}
-
-
-tbody td:nth-child(3n+0) {
-    text-align: right;
-}
-
-
-thead th:nth-child(4) {  /* discovered on */
-    width: 120px;
-}
-
-tbody tr:nth-child(2n+2) {
-    background-color: #efefef;
-}
-
-
-/* table in-borders */
-table {
-    border-collapse: collapse;
-}
-
-table td, table th {
-    border-right: 1px solid black;
-}
-
-table tr:first-child th {
-    border-top: 0;
-}
-
-table tr:last-child td {
-    border-bottom: 0;
-}
-
-table tr td:first-child,
-table tr th:first-child {
-    border-left: 0;
-}
-
-table tr td:last-child,
-table tr th:last-child {
-    border-right: 0;
+a {
+    color: black;
+    text-decoration: none;
 }
 
 

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ .T.Name }} - magnetico</title>
     <link rel="stylesheet" href="/static/styles/reset.css">
     <link rel="stylesheet" href="/static/styles/essential.css">
@@ -41,7 +42,7 @@
         </tr>
     </table>
 
-    <h3>Contents</h3>
+    <h3>Files</h3>
     <!-- Content of this element will be overwritten by the script -->
     <pre>{{ range .F }}{{ .Path }}{{ "\t" }}{{ humanizeSizeF .Size }}{{ "\n" }}{{ end }}</pre>
 </main>

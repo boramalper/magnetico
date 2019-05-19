@@ -2,9 +2,16 @@ main {
     display: flex;
     align-items: center;
     align-content: center;
+    justify-content: center;
 
     height: calc(100vh - 2 * 3em);
-    width: calc(100vw - 2 * 3em);
+    width: 100%;
+}
+
+@media only screen and (max-device-width: 800px) {
+    main {
+        flex-direction: column;
+    }
 }
 
 main form {

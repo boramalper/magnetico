@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Search - magneticow</title>
 
     <link rel="stylesheet" href="static/styles/reset.css">
@@ -12,15 +13,16 @@
     <script src="static/scripts/common.js"></script>
     <script src="static/scripts/torrents.js"></script>
 
-    <script id="row-template" type="text/x-handlebars-template">
-        <tr>
-            <td><a href="magnet:?xt=urn:btih:{{infoHash}}&dn={{name}}">
-                <img src="static/assets/magnet.gif" alt="Magnet link"
-                     title="Download this torrent using magnet" /></a></td>
-            <td><a href="/torrents/{{infoHash}}">{{name}}</a></td>
-            <td>{{size}}</td>
-            <td>{{discoveredOn}}</td>
-        </tr>
+    <script id="item-template" type="text/x-handlebars-template">
+        <li>
+            <div>
+                <h3><a href="/torrents/{{infoHash}}">{{name}}</a></h3>
+                <a href="magnet:?xt=urn:btih:{{infoHash}}&dn={{name}}">
+                    <img src="static/assets/magnet.gif" alt="Magnet link"
+                         title="Download this torrent using magnet" /> <small>{{infoHash}}</small></a>
+            </div>
+            {{size}}, {{discoveredOn}}
+        </li>
     </script>
 </head>
 <body>
@@ -36,18 +38,8 @@
     </div>
 </header>
 <main>
-    <table>
-        <thead>
-            <tr>
-                <th><!-- Magnet link --></th>
-                <th>Name</th>
-                <th>Size</th>
-                <th>Discovered on</th>
-            </tr>
-        </thead>
-        <tbody id="rows">
-        </tbody>
-    </table>
+    <ul>
+    </ul>
 </main>
 <footer>
     <button onclick="load();">

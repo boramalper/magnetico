@@ -10,6 +10,12 @@ header {
     margin-bottom: 0.833em;
 }
 
+@media only screen and (max-device-width: 800px) {
+    header {
+        flex-direction: column;
+    }
+}
+
 header div a {
     text-decoration: none;
     color: inherit;
