@@ -137,6 +137,8 @@ func staticHandler(w http.ResponseWriter, r *http.Request) {
 	var contentType string
 	if strings.HasSuffix(r.URL.Path, ".css") {
 		contentType = "text/css; charset=utf-8"
+	} else if strings.HasSuffix(r.URL.Path, ".js") {
+		contentType = "text/javascript; charset=utf-8"
 	} else { // fallback option
 		contentType = http.DetectContentType(data)
 	}
