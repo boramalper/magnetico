@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
+func apiTorrents(w http.ResponseWriter, r *http.Request) {
 	// @lastOrderedValue AND @lastID are either both supplied or neither of them should be supplied
 	// at all; and if that is NOT the case, then return an error.
 	if q := r.URL.Query(); !((q.Get("lastOrderedValue") != "" && q.Get("lastID") != "") ||
@@ -29,6 +29,7 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 		Ascending        *bool    `schema:"ascending"`
 		LastOrderedValue *float64 `schema:"lastOrderedValue"`
 		LastID           *uint64  `schema:"lastID"`
+		Limit            *uint    `schema:"limit"`
 	}
 	if err := decoder.Decode(&tq, r.URL.Query()); err != nil {
 		respondError(w, 400, "error while parsing the URL: %s", err.Error())
@@ -69,27 +70,26 @@ func apiTorrentsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if tq.Limit == nil {
+		tq.Limit = new(uint)
+		*tq.Limit = 20
+	}
+
 	torrents, err := database.QueryTorrents(
 		*tq.Query, *tq.Epoch, orderBy,
-		*tq.Ascending, N_TORRENTS, tq.LastOrderedValue, tq.LastID)
+		*tq.Ascending, *tq.Limit, tq.LastOrderedValue, tq.LastID)
 	if err != nil {
 		respondError(w, 400, "query error: %s", err.Error())
 		return
 	}
 
-	// TODO: use plain Marshal
-	jm, err := json.MarshalIndent(torrents, "", "  ")
-	if err != nil {
-		respondError(w, 500, "json marshalling error: %s", err.Error())
-		return
-	}
-
-	if _, err = w.Write(jm); err != nil {
-		zap.L().Warn("couldn't write http.ResponseWriter", zap.Error(err))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err = json.NewEncoder(w).Encode(torrents); err != nil {
+		zap.L().Warn("JSON encode error", zap.Error(err))
 	}
 }
 
-func apiTorrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
+func apiTorrent(w http.ResponseWriter, r *http.Request) {
 	infohashHex := mux.Vars(r)["infohash"]
 
 	infohash, err := hex.DecodeString(infohashHex)
@@ -107,19 +107,13 @@ func apiTorrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: use plain Marshal
-	jm, err := json.MarshalIndent(torrent, "", "  ")
-	if err != nil {
-		respondError(w, 500, "json marshalling error: %s", err.Error())
-		return
-	}
-
-	if _, err = w.Write(jm); err != nil {
-		zap.L().Warn("couldn't write http.ResponseWriter", zap.Error(err))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err = json.NewEncoder(w).Encode(torrent); err != nil {
+		zap.L().Warn("JSON encode error", zap.Error(err))
 	}
 }
 
-func apiFilesInfohashHandler(w http.ResponseWriter, r *http.Request) {
+func apiFilelist(w http.ResponseWriter, r *http.Request) {
 	infohashHex := mux.Vars(r)["infohash"]
 
 	infohash, err := hex.DecodeString(infohashHex)
@@ -137,19 +131,13 @@ func apiFilesInfohashHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: use plain Marshal
-	jm, err := json.MarshalIndent(files, "", "  ")
-	if err != nil {
-		respondError(w, 500, "json marshalling error: %s", err.Error())
-		return
-	}
-
-	if _, err = w.Write(jm); err != nil {
-		zap.L().Warn("couldn't write http.ResponseWriter", zap.Error(err))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err = json.NewEncoder(w).Encode(files); err != nil {
+		zap.L().Warn("JSON encode error", zap.Error(err))
 	}
 }
 
-func apiStatisticsHandler(w http.ResponseWriter, r *http.Request) {
+func apiStatistics(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 
 	// TODO: use gorilla?
@@ -175,15 +163,9 @@ func apiStatisticsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: use plain Marshal
-	jm, err := json.MarshalIndent(stats, "", "  ")
-	if err != nil {
-		respondError(w, 500, "json marshalling error: %s", err.Error())
-		return
-	}
-
-	if _, err = w.Write(jm); err != nil {
-		zap.L().Warn("couldn't write http.ResponseWriter", zap.Error(err))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err = json.NewEncoder(w).Encode(stats); err != nil {
+		zap.L().Warn("JSON encode error", zap.Error(err))
 	}
 }
 

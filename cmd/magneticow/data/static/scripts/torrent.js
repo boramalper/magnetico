@@ -9,52 +9,37 @@
 
 
 window.onload = function() {
-    var pre_element = document.getElementsByTagName("pre")[0];
-    var paths = pre_element.textContent.replace(/\s+$/, "").split("\n");
-    paths.sort(naturalSort);
-    paths = paths.map(function(path) { return path.split('/'); });
-    pre_element.textContent = stringify(structurise(paths)).join("\n");
-};
+    let infoHash = window.location.pathname.split("/")[2];
 
+    fetch("/api/v0.1/torrents/" + infoHash).then(x => x.json()).then(x => {
+        document.querySelector("title").innerText = x.name + " - magneticow";
 
-function structurise(paths) {
-    var items = [];
-    for(var i = 0, l = paths.length; i < l; i++) {
-        var path = paths[i];
-        var name = path[0];
-        var rest = path.slice(1);
-        var item = null;
-        for(var j = 0, m = items.length; j < m; j++) {
-            if(items[j].name === name) {
-                item = items[j];
-                break;
+        const template = document.getElementById("main-template").innerHTML;
+        document.querySelector("main").innerHTML = Mustache.render(template, {
+            name:     x.name,
+            infoHash: x.infoHash,
+            sizeHumanised: fileSize(x.size),
+            discoveredOnHumanised: humaniseDate(x.discoveredOn),
+            nFiles: x.nFiles,
+        });
+
+        fetch("/api/v0.1/torrents/" + infoHash + "/filelist").then(x => x.json()).then(x => {
+            const tree = new VanillaTree('#fileTree', {
+                placeholder: 'Loading...',
+            });
+
+            for (let e of x) {
+                let pathElems = e.path.split("/");
+
+                for (let i = 0; i < pathElems.length; i++) {
+                    tree.add({
+                        id: pathElems.slice(0, i + 1).join("/"),
+                        parent: i >= 1 ? pathElems.slice(0, i).join("/") : undefined,
+                        label: pathElems[i] + ( i === pathElems.length - 1 ? "&emsp;<tt>" + fileSize(e.size) + "</tt>" : ""),
+                        opened: true,
+                    });
+                }
             }
-        }
-        if(item === null) {
-            item = {name: name, children: []};
-            items.push(item);
-        }
-        if(rest.length > 0) {
-            item.children.push(rest);
-        }
-    }
-    for(i = 0, l = items.length; i < l; i++) {
-        item = items[i];
-        item.children = structurise(item.children);
-    }
-    return items;
-}
-
-
-function stringify(items) {
-    var lines = [];
-    for(var i = 0, l = items.length; i < l; i++) {
-        var item = items[i];
-        lines.push(item.name);
-        var subLines = stringify(item.children);
-        for(var j = 0, m = subLines.length; j < m; j++) {
-            lines.push("    " + subLines[j]);
-        }
-    }
-    return lines;
-}
+        });
+    });
+};

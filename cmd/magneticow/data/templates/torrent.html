@@ -3,12 +3,48 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ .T.Name }} - magnetico</title>
+    <title>Loading... - magneticow</title>
+
     <link rel="stylesheet" href="/static/styles/reset.css">
+    <link rel="stylesheet" href="/static/styles/vanillatree-v0.0.3.css">
     <link rel="stylesheet" href="/static/styles/essential.css">
     <link rel="stylesheet" href="/static/styles/torrent.css">
-    <script defer src="/static/scripts/naturalSort-v0.8.1.js"></script>
-    <script defer src="/static/scripts/torrent.js"></script>
+
+    <script src="/static/scripts/naturalSort-v0.8.1.js"></script>
+    <script src="/static/scripts/mustache-v2.3.0.min.js"></script>
+    <script src="/static/scripts/vanillatree-v0.0.3.js"></script>
+    <script src="/static/scripts/common.js"></script>
+    <script src="/static/scripts/torrent.js"></script>
+
+    <!-- Goes into <main> -->
+    <script id="main-template" type="text/x-handlebars-template">
+        <div id="title">
+            <h2>{{ name }}</h2>
+            <a href="magnet:?xt=urn:btih:{{ infoHash }}&amp;dn={{ name }}">
+                <img src="/static/assets/magnet.gif" alt="Magnet link"
+                     title="Download this torrent using magnet" />
+                <small>{{ infoHash }}</small>
+            </a>
+        </div>
+
+        <table>
+            <tr>
+                <th scope="row">Size</th>
+                <td>{{ sizeHumanised }}</td>
+            </tr>
+            <tr>
+                <th scope="row">Discovered on</th>
+                <td>{{ discoveredOnHumanised }}</td>
+            </tr>
+            <tr>
+                <th scope="row">Files</th>
+                <td>{{ nFiles }}</td>
+            </tr>
+        </table>
+
+        <h3>Better Files</h3>
+        <div id="fileTree"></div>
+    </script>
 </head>
 <body>
 <header>
@@ -18,33 +54,7 @@
     </form>
 </header>
 <main>
-    <div id="title">
-        <h2>{{ .T.Name }}</h2>
-        <a href="magnet:?xt=urn:btih:{{ bytesToHex .T.InfoHash }}&amp;dn={{ .T.Name }}">
-            <img src="/static/assets/magnet.gif" alt="Magnet link"
-                         title="Download this torrent using magnet" />
-            <small>{{ bytesToHex .T.InfoHash }}</small>
-        </a>
-    </div>
 
-    <table>
-        <tr>
-            <th scope="row">Size</th>
-            <td>{{ humanizeSize .T.Size }}</td>
-        </tr>
-        <tr>
-            <th scope="row">Discovered on</th>
-            <td>{{ unixTimeToYearMonthDay .T.DiscoveredOn }}</td>
-        </tr>
-        <tr>
-            <th scope="row">Files</th>
-            <td>{{ .T.NFiles }}</td>
-        </tr>
-    </table>
-
-    <h3>Files</h3>
-    <!-- Content of this element will be overwritten by the script -->
-    <pre>{{ range .F }}{{ .Path }}{{ "\t" }}{{ humanizeSizeF .Size }}{{ "\n" }}{{ end }}</pre>
 </main>
 </body>
 </html>

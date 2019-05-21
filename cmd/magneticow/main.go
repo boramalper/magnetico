@@ -29,8 +29,6 @@ import (
 	"github.com/boramalper/magnetico/pkg/persistence"
 )
 
-const N_TORRENTS = 20
-
 var compiledOn string
 
 // Set a Decoder instance as a package global, because it caches
@@ -106,14 +104,16 @@ func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/",
 		BasicAuth(rootHandler, "magneticow"))
-	router.HandleFunc("/api/v0.1/files/{infohash:[a-f0-9]{40}}",
-		BasicAuth(apiFilesInfohashHandler, "magneticow"))
+
 	router.HandleFunc("/api/v0.1/statistics",
-		BasicAuth(apiStatisticsHandler, "magneticow"))
+		BasicAuth(apiStatistics, "magneticow"))
 	router.HandleFunc("/api/v0.1/torrents",
-		BasicAuth(apiTorrentsHandler, "magneticow"))
+		BasicAuth(apiTorrents, "magneticow"))
 	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}",
-		BasicAuth(apiTorrentsInfohashHandler, "magneticow"))
+		BasicAuth(apiTorrent, "magneticow"))
+	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}/filelist",
+		BasicAuth(apiFilelist, "magneticow"))
+
 	router.HandleFunc("/feed",
 		BasicAuth(feedHandler, "magneticow"))
 	router.PathPrefix("/static").HandlerFunc(
@@ -169,7 +169,6 @@ func main() {
 	templates = make(map[string]*template.Template)
 	templates["feed"] = template.Must(template.New("feed").Funcs(templateFunctions).Parse(string(mustAsset("templates/feed.xml"))))
 	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
-	templates["torrent"] = template.Must(template.New("torrent").Funcs(templateFunctions).Parse(string(mustAsset("templates/torrent.html"))))
 
 	var err error
 	database, err = persistence.MakeDatabase(opts.Database, logger)

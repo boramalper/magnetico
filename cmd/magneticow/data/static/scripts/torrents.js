@@ -104,11 +104,7 @@ function load() {
 
         for (let t of torrents) {
             t.size = fileSize(t.size);
-            t.discoveredOn = (new Date(t.discoveredOn * 1000)).toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric"
-            });
+            t.discoveredOn = humaniseDate(t.discoveredOn);
 
             ul.innerHTML += Mustache.render(template, t);
         }

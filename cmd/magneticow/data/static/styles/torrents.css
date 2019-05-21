@@ -79,6 +79,7 @@ ul li div {
 
 ul li div h3 {
     margin: 0;
+    word-break: break-all;
 }
 
 a {

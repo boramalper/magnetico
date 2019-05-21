@@ -24,6 +24,14 @@ function fileSize(fileSizeInBytes) {
     return Math.max(fileSizeInBytes, 0.1).toFixed(1) + byteUnits[i];
 }
 
+function humaniseDate(unixTime) {
+    return (new Date(unixTime * 1000)).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+    });
+}
+
 /**
  * Returns the ISO 8601 week number for this date.
  *

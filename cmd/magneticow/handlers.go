@@ -1,15 +1,13 @@
 package main
 
 import (
-	"encoding/hex"
-	"fmt"
-	"github.com/pkg/errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/boramalper/magnetico/pkg/persistence"
-	"github.com/gorilla/mux"
 )
 
 // DONE
@@ -36,39 +34,12 @@ func torrentsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
-	infoHash, err := hex.DecodeString(mux.Vars(r)["infohash"])
-	if err != nil {
-		handlerError(errors.Wrap(err, "cannot decode infohash"), w)
-		return
-	}
-
-	torrent, err := database.GetTorrent(infoHash)
-	if err != nil {
-		handlerError(errors.Wrap(err, "cannot get torrent"), w)
-		return
-	}
-	if torrent == nil {
-		respondError(w, http.StatusNotFound, "torrent not found!")
-		return
-	}
-
-	files, err := database.GetFiles(infoHash)
-	if err != nil {
-		handlerError(errors.Wrap(err, "could not get files"), w)
-		return
-	}
-	if files == nil {
-		handlerError(fmt.Errorf("could not get files"), w)
-		return
-	}
-
-	_ = templates["torrent"].Execute(w, struct {
-		T *persistence.TorrentMetadata
-		F []persistence.File
-	}{
-		T: torrent,
-		F: files,
-	})
+	data := mustAsset("templates/torrent.html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Cache static resources for a day
+	w.Header().Set("Cache-Control", "max-age=86400")
+	_, _ = w.Write(data)
+	return
 }
 
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +73,7 @@ func feedHandler(w http.ResponseWriter, r *http.Request) {
 		time.Now().Unix(),
 		persistence.ByDiscoveredOn,
 		false,
-		N_TORRENTS,
+		20,
 		nil,
 		nil,
 	)
@@ -137,6 +108,8 @@ func staticHandler(w http.ResponseWriter, r *http.Request) {
 	var contentType string
 	if strings.HasSuffix(r.URL.Path, ".css") {
 		contentType = "text/css; charset=utf-8"
+	} else if strings.HasSuffix(r.URL.Path, ".js") {
+		contentType = "text/javascript; charset=utf-8"
 	} else { // fallback option
 		contentType = http.DetectContentType(data)
 	}

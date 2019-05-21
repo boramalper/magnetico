@@ -37,7 +37,8 @@ header > div {
 }
 
 #title h2 {
-    margin-bottom: 0px;
+    margin-bottom: 0;
+    word-break: break-all;
 }
 
 #title {
@@ -47,12 +48,6 @@ header > div {
 #title a {
     text-decoration: none;
     color: inherit;
-}
-
-pre {
-    background-color: black;
-    color: white;
-    overflow: auto;
 }
 
 table {
@@ -77,4 +72,9 @@ th {
     text-align: left;
 
     width: 1%;
+}
+
+tt {
+    font-style: italic;
+    font-size: smaller;
 }
