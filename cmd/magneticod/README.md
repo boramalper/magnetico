@@ -33,14 +33,6 @@ the repository `boramalper/magnetico`. Images are tagged as `d-vMAJOR.MINOR.PATC
    This is to prevent excessive number of ``EPERM`` "Operation not permitted" errors, which also has a negative impact
    on the performance.
 
-### Configuration
-Configuration file can be found at:
-
-- **On Linux**
-
-      ~/.config/magneticod/configuration.toml
-
-
 ## Usage
 ### Database
 **magneticod** is designed to be able to use different database engines to store its data, but
