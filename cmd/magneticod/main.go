@@ -26,8 +26,9 @@ import (
 type opFlags struct {
 	DatabaseURL string
 
-	IndexerAddrs    []string
-	IndexerInterval time.Duration
+	IndexerAddrs        []string
+	IndexerInterval     time.Duration
+	IndexerMaxNeighbors uint
 
 	LeechMaxN int
 
@@ -96,7 +97,7 @@ func main() {
 		logger.Sugar().Fatalf("Could not open the database at `%s`", opFlags.DatabaseURL, zap.Error(err))
 	}
 
-	trawlingManager := dht.NewTrawlingManager(opFlags.IndexerAddrs, opFlags.IndexerInterval)
+	trawlingManager := dht.NewManager(opFlags.IndexerAddrs, opFlags.IndexerInterval, opFlags.IndexerMaxNeighbors)
 	metadataSink := metadata.NewSink(5*time.Second, opFlags.LeechMaxN)
 
 	// The Event Loop
@@ -135,8 +136,9 @@ func parseFlags() (*opFlags, error) {
 	var cmdF struct {
 		DatabaseURL string `long:"database" description:"URL of the database."`
 
-		IndexerAddrs    []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0"`
-		IndexerInterval uint     `long:"indexer-interval" description:"Indexing interval in integer seconds."`
+		IndexerAddrs        []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0"`
+		IndexerInterval     uint     `long:"indexer-interval" description:"Indexing interval in integer seconds." default:"1"`
+		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"10000"`
 
 		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"200"`
 
@@ -170,11 +172,8 @@ func parseFlags() (*opFlags, error) {
 		opF.IndexerAddrs = cmdF.IndexerAddrs
 	}
 
-	if cmdF.IndexerInterval == 0 {
-		opF.IndexerInterval = 2 * time.Second
-	} else {
-		opF.IndexerInterval = time.Duration(cmdF.IndexerInterval) * time.Second
-	}
+	opF.IndexerInterval = time.Duration(cmdF.IndexerInterval) * time.Second
+	opF.IndexerMaxNeighbors = cmdF.IndexerMaxNeighbors
 
 	opF.LeechMaxN = int(cmdF.LeechMaxN)
 	if opF.LeechMaxN > 1000 {

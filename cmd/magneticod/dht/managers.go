@@ -24,12 +24,12 @@ type Manager struct {
 	indexingServices []Service
 }
 
-func NewTrawlingManager(addrs []string, interval time.Duration) *Manager {
+func NewManager(addrs []string, interval time.Duration, maxNeighbors uint) *Manager {
 	manager := new(Manager)
 	manager.output = make(chan Result, 20)
 
 	for _, addr := range addrs {
-		service := mainline.NewIndexingService(addr, 2*time.Second, mainline.IndexingServiceEventHandlers{
+		service := mainline.NewIndexingService(addr, interval, maxNeighbors, mainline.IndexingServiceEventHandlers{
 			OnResult: manager.onIndexingResult,
 		})
 		manager.indexingServices = append(manager.indexingServices, service)

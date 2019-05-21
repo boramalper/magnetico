@@ -46,7 +46,7 @@ func (ir IndexingResult) PeerAddrs() []net.TCPAddr {
 	return ir.peerAddrs
 }
 
-func NewIndexingService(laddr string, interval time.Duration, eventHandlers IndexingServiceEventHandlers) *IndexingService {
+func NewIndexingService(laddr string, interval time.Duration, maxNeighbors uint, eventHandlers IndexingServiceEventHandlers) *IndexingService {
 	service := new(IndexingService)
 	service.interval = interval
 	service.protocol = NewProtocol(
@@ -60,7 +60,7 @@ func NewIndexingService(laddr string, interval time.Duration, eventHandlers Inde
 	service.nodeID = make([]byte, 20)
 	service.routingTable = make(map[string]*net.UDPAddr)
 	service.routingTableMutex = new(sync.Mutex)
-	service.maxNeighbors = 50
+	service.maxNeighbors = maxNeighbors
 	service.eventHandlers = eventHandlers
 
 	service.getPeersRequests = make(map[[2]byte][20]byte)
@@ -92,6 +92,7 @@ func (is *IndexingService) index() {
 		} else {
 			zap.L().Info("Latest status:", zap.Int("n", len(is.routingTable)),
 				zap.Uint("maxNeighbors", is.maxNeighbors))
+			//TODO
 			is.findNeighbors()
 			is.routingTable = make(map[string]*net.UDPAddr)
 		}
@@ -134,7 +135,7 @@ func (is *IndexingService) findNeighbors() {
 		}
 
 		is.protocol.SendMessage(
-			NewFindNodeQuery(is.nodeID, target),
+			NewSampleInfohashesQuery(is.nodeID, []byte("aa"), target),
 			addr,
 		)
 	}
@@ -143,8 +144,6 @@ func (is *IndexingService) findNeighbors() {
 func (is *IndexingService) onFindNodeResponse(response *Message, addr *net.UDPAddr) {
 	is.routingTableMutex.Lock()
 	defer is.routingTableMutex.Unlock()
-
-	//zap.S().Debugf("find node response from %+v  --  %+v", addr, response)
 
 	for _, node := range response.R.Nodes {
 		if uint(len(is.routingTable)) >= is.maxNeighbors {
@@ -221,6 +220,16 @@ func (is *IndexingService) onSampleInfohashesResponse(msg *Message, addr *net.UD
 
 	// iterate
 	for _, node := range msg.R.Nodes {
+		if uint(len(is.routingTable)) >= is.maxNeighbors {
+			break
+		}
+		if node.Addr.Port == 0 { // Ignore nodes who "use" port 0.
+			continue
+		}
+		is.routingTable[string(node.ID)] = &node.Addr
+
+		// TODO
+		/*
 		target := make([]byte, 20)
 		_, err := rand.Read(target)
 		if err != nil {
@@ -230,6 +239,7 @@ func (is *IndexingService) onSampleInfohashesResponse(msg *Message, addr *net.UD
 			NewSampleInfohashesQuery(is.nodeID, []byte("aa"), target),
 			&node.Addr,
 		)
+		*/
 	}
 }
 
