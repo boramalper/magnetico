@@ -18,7 +18,7 @@ central entity*.
 
 ## Features
 - Easy installation & minimal requirements:
-  - [Pre-compiled static binaries](https://github.com/boramalper/magnetico/releases) and [Docker images](https://cloud.docker.com/repository/docker/boramalper/magnetico) are provided.
+  - [Pre-compiled static binaries](https://github.com/boramalper/magnetico/releases) and [Docker images](https://hub.docker.com/u/boramalper) are provided.
   - Root access is *not* required to install or to use.
 - Near-zero configuration:
   - Both programs work out of the box, and **magneticow** can be used without a web-server too.
