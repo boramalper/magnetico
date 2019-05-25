@@ -71,7 +71,7 @@ for torrents in the network, hence removing the need for centralised torrent web
 2. Install **magneticow** afterwards by following its
    [installation instructions](cmd/magneticow/README.md).
 
-*Alternatively*, just grab it from [Docker Hub](https://cloud.docker.com/repository/docker/boramalper/magnetico)!
+*Alternatively*, just grab it from [Docker Hub](https://hub.docker.com/u/boramalper)!
 
 ## License
 
