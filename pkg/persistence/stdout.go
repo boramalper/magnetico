@@ -10,8 +10,8 @@ import (
 
 type out struct {
 	InfoHash []byte `json:"infoHash"`
-	Name string     `json:"name"`
-	Files []File    `json:"files"`
+	Name     string `json:"name"`
+	Files    []File `json:"files"`
 }
 
 var notSupportedError = errors.New("This dummy database engine (\"stdout\") does not support any sort of queries")
@@ -40,10 +40,10 @@ func (s *stdout) DoesTorrentExist(infoHash []byte) (bool, error) {
 }
 
 func (s *stdout) AddNewTorrent(infoHash []byte, name string, files []File) error {
-	err := s.encoder.Encode(out {
+	err := s.encoder.Encode(out{
 		InfoHash: infoHash,
-		Name: name,
-		Files: files,
+		Name:     name,
+		Files:    files,
 	})
 	if err != nil {
 		return errors.Wrap(err, "DB engine stdout encode error")
