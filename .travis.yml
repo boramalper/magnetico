@@ -4,7 +4,10 @@ dist: xenial
 
 language: go
 go:
-  - "1.12"
+  - "1.13"
+
+env:
+  - GO111MODULE=on
 
 # Only clone the most recent commit.
 git:
