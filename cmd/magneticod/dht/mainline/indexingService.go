@@ -230,15 +230,15 @@ func (is *IndexingService) onSampleInfohashesResponse(msg *Message, addr *net.UD
 
 		// TODO
 		/*
-		target := make([]byte, 20)
-		_, err := rand.Read(target)
-		if err != nil {
-			zap.L().Panic("Could NOT generate random bytes!")
-		}
-		is.protocol.SendMessage(
-			NewSampleInfohashesQuery(is.nodeID, []byte("aa"), target),
-			&node.Addr,
-		)
+			target := make([]byte, 20)
+			_, err := rand.Read(target)
+			if err != nil {
+				zap.L().Panic("Could NOT generate random bytes!")
+			}
+			is.protocol.SendMessage(
+				NewSampleInfohashesQuery(is.nodeID, []byte("aa"), target),
+				&node.Addr,
+			)
 		*/
 	}
 }

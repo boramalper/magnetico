@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/pkg/errors"
 	"html/template"
 	"io"
 	"net/http"
@@ -16,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/Wessie/appdirs"
 	"github.com/dustin/go-humanize"
@@ -60,7 +61,7 @@ func main() {
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
 
-	zap.L().Info("magneticow v0.8 has been started.")
+	zap.L().Info("magneticow v0.8.2 has been started.")
 	zap.L().Info("Copyright (C) 2017-2019  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 	zap.S().Infof("Compiled on %s", compiledOn)
@@ -287,7 +288,7 @@ func loadCred(cred string) error {
 		 */
 		re := regexp.MustCompile(`^[a-z](?:_?[a-z0-9])*:\$2[aby]?\$\d{1,2}\$[./A-Za-z0-9]{53}$`)
 		if !re.Match(line) {
-			return fmt.Errorf("on line %d: format should be: <USERNAME>:<BCRYPT HASH>", lineno)
+			return fmt.Errorf("on line %d: format should be: <USERNAME>:<BCRYPT HASH>, instead got: %s", lineno, line)
 		}
 
 		tokens := bytes.Split(line, []byte(":"))

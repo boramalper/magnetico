@@ -54,15 +54,12 @@ You need to mount
 hence run:
 
   ```bash
-  docker run \
+  docker run -it --rm \
     -v ~/.local/share/magneticod:/root/.local/share/magneticod/ \
     -v ~/.config/magneticod/configuration.toml:/root/.config/magneticod/configuration.toml \
-    magneticod
+    boramalper/magneticod
   ```
   
-__Tip:__ Containers that you terminate won't be removed; run
-`docker rm $(docker ps -q -f status=exited)` to remove exited containers.
-
 ### Remark About the Network Usage
 **magneticod** does *not* have any built-in rate limiter *yet*, and it will literally suck the hell out of your
 bandwidth. Unless you are running **magneticod** on a separate machine dedicated for it, you might want to consider

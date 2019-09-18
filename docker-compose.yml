@@ -1,7 +1,4 @@
-version: "3"
-
-volumes:
-  home:
+version: "2"
 
 services:
   magneticod:
@@ -9,17 +6,22 @@ services:
       context: .
       dockerfile: Dockerfile.magneticod
     volumes:
-      - home:/home/magnetico
+      - magneticod-data:/root/.local/share/magneticod
+      - magneticod-config:/root/.config/magneticod
 
   magneticow:
     build:
       context: .
       dockerfile: Dockerfile.magneticow
     volumes:
-      - home:/home/magnetico
+      - magneticod-data:/root/.local/share/magneticod
     depends_on:
       # It doesn't necessarily "depend" on magneticod, but you would probably like to start them at the same time.
       - magneticod
-
     ports:
       - "8080:8080"
+
+volumes:
+  magneticod-config:
+
+  magneticod-data:

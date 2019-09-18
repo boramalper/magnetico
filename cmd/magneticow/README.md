@@ -80,11 +80,13 @@ You need to mount
 hence run:
 
   ```bash
-  docker run \
+  docker run -it --rm \
     -v ~/.local/share/magneticod:/root/.local/share/magneticod/ \
     -v ~/.config/magneticow/configuration.toml:/root/.config/magneticow/configuration.toml \
-    magneticow
+    boramalper/magneticow
   ```
+  
+Using Docker, the default username & password is `magnetico` and `magnetico`.
 
 ### Searching
 * Only the **titles** of the torrents are being searched.

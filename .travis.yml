@@ -16,7 +16,6 @@ before_install:
 
 install:
   - "go get -u -v github.com/kevinburke/go-bindata/..."
-  - "go get -u -v honnef.co/go/tools/cmd/staticcheck"
 
 before_script:
   - "make magneticod"
