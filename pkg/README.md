@@ -21,4 +21,4 @@ program to build your own pipelines on the fly!
 > **WARNING:**
 >
 > Please beware that the schema of the object (dictionary) might change in backwards-incompatible ways 
-> in the future; although I'll my best to ensure it won't happen.
+> in the future; although I'll do my best to ensure it won't happen.
