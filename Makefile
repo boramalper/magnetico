@@ -12,10 +12,10 @@ magneticow:
 	go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" ./cmd/magneticow
 
 image-magneticod:
-	docker build -t magneticod -f Dockerfile.magneticod .
+	docker build -t boramalper/magneticod -f Dockerfile.magneticod .
 
 image-magneticow:
-	docker build -t magneticow -f Dockerfile.magneticow .
+	docker build -t boramalper/magneticow -f Dockerfile.magneticow .
 
 image: image-magneticod image-magneticow
 
