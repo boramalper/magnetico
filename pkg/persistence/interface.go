@@ -60,6 +60,7 @@ type databaseEngine uint8
 
 const (
 	Sqlite3 databaseEngine = 1
+	Stdout
 )
 
 type Statistics struct {
@@ -111,6 +112,9 @@ func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 	switch url_.Scheme {
 	case "sqlite3":
 		return makeSqlite3Database(url_)
+
+	case "stdout":
+		return makeStdoutDatabase(url_)
 
 	case "postgresql":
 		return nil, fmt.Errorf("postgresql is not yet supported")
