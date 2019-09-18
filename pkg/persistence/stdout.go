@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -9,7 +10,7 @@ import (
 )
 
 type out struct {
-	InfoHash []byte `json:"infoHash"`
+	InfoHash string `json:"infoHash"`
 	Name     string `json:"name"`
 	Files    []File `json:"files"`
 }
@@ -41,7 +42,7 @@ func (s *stdout) DoesTorrentExist(infoHash []byte) (bool, error) {
 
 func (s *stdout) AddNewTorrent(infoHash []byte, name string, files []File) error {
 	err := s.encoder.Encode(out{
-		InfoHash: infoHash,
+		InfoHash: hex.EncodeToString(infoHash),
 		Name:     name,
 		Files:    files,
 	})
