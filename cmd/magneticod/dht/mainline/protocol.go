@@ -36,8 +36,8 @@ type ProtocolEventHandlers struct {
 
 func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol) {
 	p = new(Protocol)
-	p.transport = NewTransport(laddr, p.onMessage, p.eventHandlers.OnCongestion)
 	p.eventHandlers = eventHandlers
+	p.transport = NewTransport(laddr, p.onMessage, p.eventHandlers.OnCongestion)
 
 	p.currentTokenSecret, p.previousTokenSecret = make([]byte, 20), make([]byte, 20)
 	_, err := rand.Read(p.currentTokenSecret)
