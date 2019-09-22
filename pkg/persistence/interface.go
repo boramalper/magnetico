@@ -63,6 +63,7 @@ type databaseEngine uint8
 const (
 	Sqlite3 databaseEngine = iota + 1
 	Postgres
+	Beanstalkd
 	Stdout
 )
 
@@ -89,6 +90,12 @@ type TorrentMetadata struct {
 	DiscoveredOn int64   `json:"discoveredOn"`
 	NFiles       uint    `json:"nFiles"`
 	Relevance    float64 `json:"relevance"`
+}
+
+type SimpleTorrentSummary struct {
+	InfoHash string `json:"infoHash"`
+	Name     string `json:"name"`
+	Files    []File `json:"files"`
 }
 
 func (tm *TorrentMetadata) MarshalJSON() ([]byte, error) {
@@ -121,6 +128,9 @@ func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 
 	case "stdout":
 		return makeStdoutDatabase(url_)
+
+	case "beanstalk", "beanstalkd":
+		return makeBeanstalkDatabase(url_)
 
 	case "mysql":
 		return nil, fmt.Errorf("mysql is not yet supported")

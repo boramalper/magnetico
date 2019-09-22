@@ -9,12 +9,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type out struct {
-	InfoHash string `json:"infoHash"`
-	Name     string `json:"name"`
-	Files    []File `json:"files"`
-}
-
 func makeStdoutDatabase(_ *url.URL) (Database, error) {
 	s := new(stdout)
 	s.encoder = json.NewEncoder(os.Stdout)
@@ -39,7 +33,7 @@ func (s *stdout) DoesTorrentExist(infoHash []byte) (bool, error) {
 }
 
 func (s *stdout) AddNewTorrent(infoHash []byte, name string, files []File) error {
-	err := s.encoder.Encode(out{
+	err := s.encoder.Encode(SimpleTorrentSummary{
 		InfoHash: hex.EncodeToString(infoHash),
 		Name:     name,
 		Files:    files,
