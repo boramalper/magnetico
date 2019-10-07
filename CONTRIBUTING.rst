@@ -11,8 +11,8 @@ There are several kinds of contributions and feel free to choose ones that you f
 
 1. Programming
 
-   If you are a **Python** programmer, great! **JavaScript** programmers are too welcome. **magneticod** and
-   **magneticow** are programmed in Python 3, and we use a tiny tiny bit of JavaScript for the web interface offered by
+   If you are a **Go** programmer, great! **JavaScript** programmers are too welcome. **magneticod** and
+   **magneticow** are programmed in Go, and we use a tiny tiny bit of JavaScript for the web interface offered by
    **magneticow**. We are trying to keep the amount of JavaScript used to the bare minimum (so that users with NoScript
    and JavaScript disabled can still use it), so if your contribution is refused, please do not take it personally.
 
@@ -61,9 +61,8 @@ Python Coding Guidelines
   operations, for instance in complex for-loops, functions etc. Shorter names would allow the programmer to follow the
   flow of the operations and logic behind the manipulation more easily and hence justified. But, comments are required
   in those cases.
-* Do NOT use shebang line to specify the interpreter or the encoding of the file. The former is handled by the Python's
-  setuptools and latter is UTF-8, for every and each source file.
-* Prefer Python standard library over 3rd party solutions, unless justified.
+* Do NOT use shebang line to specify the interpreter or the encoding of the file. Go is compiled, and the native encoding is UTF-8, for every and each source file.
+* Prefer Go standard library over 3rd party solutions, unless justified.
 
 
 
