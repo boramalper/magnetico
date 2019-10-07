@@ -40,7 +40,7 @@ type Message struct {
 }
 
 type QueryArguments struct {
-	// ID of the quirying Node
+	// ID of the querying Node
 	ID []byte `bencode:"id"`
 	// InfoHash of the torrent
 	InfoHash []byte `bencode:"info_hash,omitempty"`
