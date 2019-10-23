@@ -22,7 +22,7 @@ type IndexingService struct {
 	// (or even the conversion between each other) is a pain; hence map[string]net.UDPAddr
 	//                                                                  ^~~~~~
 	routingTable      map[string]*net.UDPAddr
-	routingTableMutex *sync.Mutex
+	routingTableMutex sync.RWMutex
 	maxNeighbors      uint
 
 	counter          uint16
@@ -54,12 +54,11 @@ func NewIndexingService(laddr string, interval time.Duration, maxNeighbors uint,
 		ProtocolEventHandlers{
 			OnFindNodeResponse:         service.onFindNodeResponse,
 			OnGetPeersResponse:         service.onGetPeersResponse,
-			OnSampleInfohashesResponse: service.onSampleInfohashesResponse,
+			OnSampleInfohashesResponse: service.onSampleInfoHashesResponse,
 		},
 	)
 	service.nodeID = make([]byte, 20)
 	service.routingTable = make(map[string]*net.UDPAddr)
-	service.routingTableMutex = new(sync.Mutex)
 	service.maxNeighbors = maxNeighbors
 	service.eventHandlers = eventHandlers
 
@@ -86,17 +85,20 @@ func (is *IndexingService) Terminate() {
 
 func (is *IndexingService) index() {
 	for range time.Tick(is.interval) {
-		is.routingTableMutex.Lock()
-		if len(is.routingTable) == 0 {
+		is.routingTableMutex.RLock()
+		routingTableLen := len(is.routingTable)
+		is.routingTableMutex.RUnlock()
+		if routingTableLen == 0 {
 			is.bootstrap()
 		} else {
-			zap.L().Info("Latest status:", zap.Int("n", len(is.routingTable)),
+			zap.L().Info("Latest status:", zap.Int("n", routingTableLen),
 				zap.Uint("maxNeighbors", is.maxNeighbors))
 			//TODO
 			is.findNeighbors()
+			is.routingTableMutex.Lock()
 			is.routingTable = make(map[string]*net.UDPAddr)
+			is.routingTableMutex.Unlock()
 		}
-		is.routingTableMutex.Unlock()
 	}
 }
 
@@ -112,6 +114,7 @@ func (is *IndexingService) bootstrap() {
 		target := make([]byte, 20)
 		_, err := rand.Read(target)
 		if err != nil {
+			//technically impossible with rand.read : "It always returns len(p) and a nil error"
 			zap.L().Panic("Could NOT generate random bytes during bootstrapping!")
 		}
 
@@ -128,6 +131,8 @@ func (is *IndexingService) bootstrap() {
 
 func (is *IndexingService) findNeighbors() {
 	target := make([]byte, 20)
+	is.routingTableMutex.RLock()
+	defer is.routingTableMutex.RUnlock()
 	for _, addr := range is.routingTable {
 		_, err := rand.Read(target)
 		if err != nil {
@@ -153,6 +158,7 @@ func (is *IndexingService) onFindNodeResponse(response *Message, addr *net.UDPAd
 			continue
 		}
 
+		//addig to routing table so that we can find these nodes neighbours later on
 		is.routingTable[string(node.ID)] = &node.Addr
 
 		target := make([]byte, 20)
@@ -202,7 +208,7 @@ func (is *IndexingService) onGetPeersResponse(msg *Message, addr *net.UDPAddr) {
 	})
 }
 
-func (is *IndexingService) onSampleInfohashesResponse(msg *Message, addr *net.UDPAddr) {
+func (is *IndexingService) onSampleInfoHashesResponse(msg *Message, addr *net.UDPAddr) {
 	// request samples
 	for i := 0; i < len(msg.R.Samples)/20; i++ {
 		var infoHash [20]byte
@@ -219,6 +225,8 @@ func (is *IndexingService) onSampleInfohashesResponse(msg *Message, addr *net.UD
 	}
 
 	// iterate
+	is.routingTableMutex.Lock()
+	defer is.routingTableMutex.Unlock()
 	for _, node := range msg.R.Nodes {
 		if uint(len(is.routingTable)) >= is.maxNeighbors {
 			break

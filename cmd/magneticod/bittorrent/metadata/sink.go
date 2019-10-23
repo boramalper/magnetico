@@ -86,10 +86,10 @@ func NewSink(deadline time.Duration, maxNLeeches int) *Sink {
 	go func() {
 		for range time.Tick(deadline) {
 			ms.incomingInfoHashesMx.Lock()
-			l := len(ms.incomingInfoHashes)
+			leeches := len(ms.incomingInfoHashes)
 			ms.incomingInfoHashesMx.Unlock()
 			zap.L().Info("Sink status",
-				zap.Int("activeLeeches", l),
+				zap.Int("activeLeeches", leeches),
 				zap.Int("nDeleted", ms.deleted),
 				zap.Int("drainQueue", len(ms.drain)),
 			)
@@ -116,6 +116,7 @@ func (ms *Sink) Sink(res dht.Result) {
 	peerAddrs := res.PeerAddrs()
 
 	if _, exists := ms.incomingInfoHashes[infoHash]; exists {
+		//TODO should we not update info for that hash?
 		return
 	} else if len(peerAddrs) > 0 {
 		peer := peerAddrs[0]
@@ -165,6 +166,7 @@ func (ms *Sink) onLeechError(infoHash [20]byte, err error) {
 	ms.incomingInfoHashesMx.Lock()
 	defer ms.incomingInfoHashesMx.Unlock()
 
+	//retry with the next peer
 	if len(ms.incomingInfoHashes[infoHash]) > 0 {
 		peer := ms.incomingInfoHashes[infoHash][0]
 		ms.incomingInfoHashes[infoHash] = ms.incomingInfoHashes[infoHash][1:]

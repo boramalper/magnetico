@@ -96,6 +96,13 @@ func main() {
 	if err != nil {
 		logger.Sugar().Fatalf("Could not open the database at `%s`", opFlags.DatabaseURL, zap.Error(err))
 	}
+	defer func(){
+		if err = database.Close(); err != nil {
+			zap.L().Error("Could not close database!", zap.Error(err))
+		}
+	}()
+	zap.L().Debug("Database init succeeded")
+
 
 	trawlingManager := dht.NewManager(opFlags.IndexerAddrs, opFlags.IndexerInterval, opFlags.IndexerMaxNeighbors)
 	metadataSink := metadata.NewSink(5*time.Second, opFlags.LeechMaxN)
@@ -125,10 +132,6 @@ func main() {
 			trawlingManager.Terminate()
 			stopped = true
 		}
-	}
-
-	if err = database.Close(); err != nil {
-		zap.L().Error("Could not close database!", zap.Error(err))
 	}
 }
 

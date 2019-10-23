@@ -57,6 +57,7 @@ func (p *Protocol) Start() {
 
 	p.transport.Start()
 	go p.updateTokenSecret()
+	go printStats()
 }
 
 func (p *Protocol) Terminate() {
@@ -69,7 +70,7 @@ func (p *Protocol) Terminate() {
 
 func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
 	switch msg.Y {
-	case "q":
+	case "q": //query
 		switch msg.Q {
 		case "ping":
 			if !validatePingQueryMessage(msg) {
@@ -125,7 +126,7 @@ func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
 			// zap.L().Debug("A KRPC query of an unknown method received!", zap.String("method", msg.Q))
 			return
 		}
-	case "r":
+	case "r": //response
 		// Query messages have a `q` field which indicates their type but response messages have no such field that we
 		// can rely on.
 		// The idea is you'd use transaction ID (the `t` key) to deduce the type of a response message, as it must be
@@ -286,11 +287,11 @@ func (p *Protocol) updateTokenSecret() {
 		p.tokenLock.Lock()
 		copy(p.previousTokenSecret, p.currentTokenSecret)
 		_, err := rand.Read(p.currentTokenSecret)
+		p.tokenLock.Unlock()
+
 		if err != nil {
-			p.tokenLock.Unlock()
 			zap.L().Fatal("Could NOT generate random bytes for token secret!", zap.Error(err))
 		}
-		p.tokenLock.Unlock()
 	}
 }
 

@@ -493,6 +493,7 @@ func (db *sqlite3Database) setupDatabase() error {
 	//
 	// Enable foreign key constraints in SQLite which are crucial to prevent programmer errors on
 	// our side.
+
 	_, err := db.conn.Exec(`
 		PRAGMA journal_mode=WAL;
 		PRAGMA temp_store=1;

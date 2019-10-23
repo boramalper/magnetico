@@ -1,16 +1,22 @@
 package mainline
 
 import (
-	"net"
-
+	"bytes"
+	"fmt"
 	"github.com/anacrolix/torrent/bencode"
 	sockaddr "github.com/libp2p/go-sockaddr/net"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
+	"net"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type Transport struct {
-	fd      int
+	fd      int //udp socket
 	laddr   *net.UDPAddr
 	started bool
 	buffer  []byte
@@ -72,6 +78,8 @@ func (t *Transport) Start() {
 		zap.L().Fatal("Could NOT create a UDP socket!", zap.Error(err))
 	}
 
+	fmt.Println("created socket ",t.fd)
+
 	var ip [4]byte
 	copy(ip[:], t.laddr.IP.To4())
 	err = unix.Bind(t.fd, &unix.SockaddrInet4{Addr: ip, Port: t.laddr.Port})
@@ -91,10 +99,11 @@ func (t *Transport) readMessages() {
 	for {
 		n, fromSA, err := unix.Recvfrom(t.fd, t.buffer, 0)
 		if err == unix.EPERM || err == unix.ENOBUFS { // todo: are these errors possible for recvfrom?
-			zap.L().Warn("READ CONGESTION!", zap.Error(err))
+			zap.L().Warn("READ CONGESTION!", zap.Error(err),)
 			t.onCongestion()
 		} else if err != nil {
 			// Socket is probably closed
+			zap.L().Warn("closing transport on "+t.laddr.String(),)
 			break
 		}
 
@@ -121,6 +130,63 @@ func (t *Transport) readMessages() {
 	}
 }
 
+var statsLock sync.RWMutex
+var sentPorts = make(map[string]int)
+type PortCount struct{
+	portNumber string
+	portCount int
+}
+type PortCounts []PortCount
+func (s PortCounts) Len() int {
+	return len(s)
+}
+func (s PortCounts) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s PortCounts) Less(i, j int) bool {
+	return s[i].portCount > s[j].portCount
+}
+var totalSend int
+func printStats(){
+	sleepTime := 5*time.Second
+	for{
+		time.Sleep(sleepTime)
+		statsLock.Lock()
+
+		tempOrderedPorts := make(PortCounts,0,len(sentPorts))
+
+		for port, count := range sentPorts{
+			tempOrderedPorts = append(tempOrderedPorts, PortCount{port,count})
+		}
+
+		sort.Sort(tempOrderedPorts)
+
+		mostUsedPortsBuffer := bytes.Buffer{}
+		rateBuffer := bytes.Buffer{}
+		for i,pc := range tempOrderedPorts{
+			if i > 5 {break}else if i > 0{
+				mostUsedPortsBuffer.WriteString(", ")}
+
+			mostUsedPortsBuffer.WriteString(pc.portNumber)
+			mostUsedPortsBuffer.WriteString("(")
+			mostUsedPortsBuffer.WriteString(strconv.Itoa(pc.portCount))
+			mostUsedPortsBuffer.WriteString(")")
+		}
+
+		rateBuffer.WriteString(strconv.FormatFloat(float64(totalSend) / sleepTime.Seconds(),'f',-1,64))
+		rateBuffer.WriteString(" msg/s")
+
+		zap.L().Info("Stats: ",
+			zap.String("ports",mostUsedPortsBuffer.String()),
+			zap.String("rate",rateBuffer.String()))
+
+		sentPorts = make(map[string]int)
+		totalSend = 0
+
+		statsLock.Unlock()
+	}
+}
+
 func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 	data, err := bencode.Marshal(msg)
 	if err != nil {
@@ -133,6 +199,16 @@ func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 			zap.String("addr", addr.String()))
 		return
 	}
+
+	statsLock.Lock()
+	a := strings.Split(addr.String(),":")[1]
+	if _, ok := sentPorts[a] ; ok{
+		sentPorts[a] ++
+	}else{
+		sentPorts[a] = 1
+	}
+	totalSend++
+	statsLock.Unlock()
 
 	err = unix.Sendto(t.fd, data, 0, addrSA)
 	if err == unix.EPERM || err == unix.ENOBUFS {
@@ -150,7 +226,7 @@ func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 		 *
 		 * Source: https://docs.python.org/3/library/asyncio-protocol.html#flow-control-callbacks
 		 */
-		zap.L().Warn("WRITE CONGESTION!", zap.Error(err))
+		zap.L().Warn("WRITE CONGESTION ON SOCKET "+strconv.Itoa(t.fd)+"!", zap.Error(err),)
 		if t.onCongestion != nil {
 			t.onCongestion()
 		}

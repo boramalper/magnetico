@@ -60,6 +60,16 @@ hence run:
     boramalper/magneticod
   ```
   
+### General flow
+1) Having  a list of nodes (initially bootstrapped with nodes given by default trackers), send
+queries to find information about stored hashes to each
+2) From an hash response, request a peers query to that node for that hash. Also, in case the response contains
+a list of additional nodes, add them to the initial list.
+    1) From a peer response, add all peers and the hash associated to a structure and try to fetch information
+    for that hash (torrent name, size etc.). On success, save it in the DB. On failure, try
+    requesting to another peer.
+3) Reiterate
+  
 ### Remark About the Network Usage
 **magneticod** does *not* have any built-in rate limiter *yet*, and it will literally suck the hell out of your
 bandwidth. Unless you are running **magneticod** on a separate machine dedicated for it, you might want to consider
