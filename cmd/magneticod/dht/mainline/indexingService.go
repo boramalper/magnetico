@@ -26,7 +26,27 @@ type IndexingService struct {
 	maxNeighbors      uint
 
 	counter          uint16
-	getPeersRequests map[[2]byte][20]byte // GetPeersQuery.`t` -> infohash
+	getPeersRequests *peerRequestMap // GetPeersQuery.`t` -> infohash
+}
+
+type peerRequestMap struct{
+	sync.RWMutex
+	peerMap map[[2]byte][20]byte
+}
+func (prm *peerRequestMap) Set(key [2]byte, value [20]byte){
+	prm.Lock()
+	defer prm.Unlock()
+	prm.peerMap[key] = value
+}
+func (prm *peerRequestMap) Get(key [2]byte) [20]byte{
+	prm.RLock()
+	defer prm.RUnlock()
+	return prm.peerMap[key]
+}
+func (prm *peerRequestMap) Delete(key [2]byte){
+	prm.Lock()
+	defer prm.Unlock()
+	delete(prm.peerMap,key)
 }
 
 type IndexingServiceEventHandlers struct {
@@ -62,7 +82,9 @@ func NewIndexingService(laddr string, interval time.Duration, maxNeighbors uint,
 	service.maxNeighbors = maxNeighbors
 	service.eventHandlers = eventHandlers
 
-	service.getPeersRequests = make(map[[2]byte][20]byte)
+	service.getPeersRequests = &peerRequestMap{
+		peerMap:make(map[[2]byte][20]byte),
+	}
 
 	return service
 }
@@ -177,9 +199,9 @@ func (is *IndexingService) onGetPeersResponse(msg *Message, addr *net.UDPAddr) {
 	var t [2]byte
 	copy(t[:], msg.T)
 
-	infoHash := is.getPeersRequests[t]
+	infoHash := is.getPeersRequests.Get(t)
 	// We got a response, so free the key!
-	delete(is.getPeersRequests, t)
+	is.getPeersRequests.Delete(t)
 
 	// BEP 51 specifies that
 	//     The new sample_infohashes remote procedure call requests that a remote node return a string of multiple
@@ -220,7 +242,7 @@ func (is *IndexingService) onSampleInfoHashesResponse(msg *Message, addr *net.UD
 
 		is.protocol.SendMessage(msg, addr)
 
-		is.getPeersRequests[t] = infoHash
+		is.getPeersRequests.Set(t,infoHash)
 		is.counter++
 	}
 

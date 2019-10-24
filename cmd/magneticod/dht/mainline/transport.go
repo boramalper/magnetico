@@ -7,6 +7,7 @@ import (
 	sockaddr "github.com/libp2p/go-sockaddr/net"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
+	"math/rand"
 	"net"
 	"sort"
 	"strconv"
@@ -27,6 +28,37 @@ type Transport struct {
 	onMessage func(*Message, *net.UDPAddr)
 	// OnCongestion
 	onCongestion func()
+
+	stats *Stats
+}
+type Transports []*Transport
+
+
+func (ts Transports) GetRandom() *Transport{
+	rand.Seed(time.Now().UnixNano())
+	return ts[rand.Intn(len(ts))]
+}
+func NewTransports(size int,laddr string, onMessage func(*Message, *net.UDPAddr), onCongestion func()) (oTransports Transports) {
+	oTransports = make(Transports, 0, size)
+	for i := 0 ; i < size ; i++{
+		oTransports = append(oTransports, NewTransport(laddr,onMessage,onCongestion))
+	}
+
+	return
+}
+func (ts Transports) Start(){
+	for _,t := range ts{
+		t.Start()
+	}
+}
+func (ts Transports) Terminate(){
+	for _,t := range ts{
+		t.Terminate()
+	}
+}
+func (ts Transports) WriteMessages(msg *Message, addr *net.UDPAddr){
+	randomTransport := ts.GetRandom()
+	randomTransport.WriteMessages(msg, addr)
 }
 
 func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onCongestion func()) *Transport {
@@ -53,6 +85,10 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 	}
 	if t.laddr.IP.To4() == nil {
 		zap.L().Panic("IP address is not IPv4!")
+	}
+
+	t.stats = &Stats{
+		sentPorts: make(map[string]int),
 	}
 
 	return t
@@ -88,6 +124,7 @@ func (t *Transport) Start() {
 	}
 
 	go t.readMessages()
+	go t.printStats()
 }
 
 func (t *Transport) Terminate() {
@@ -130,8 +167,11 @@ func (t *Transport) readMessages() {
 	}
 }
 
-var statsLock sync.RWMutex
-var sentPorts = make(map[string]int)
+type Stats struct{
+	sync.RWMutex
+	sentPorts map[string]int
+	totalSend int
+}
 type PortCount struct{
 	portNumber string
 	portCount int
@@ -146,16 +186,15 @@ func (s PortCounts) Swap(i, j int) {
 func (s PortCounts) Less(i, j int) bool {
 	return s[i].portCount > s[j].portCount
 }
-var totalSend int
-func printStats(){
+func (t *Transport) printStats(){
 	sleepTime := 5*time.Second
 	for{
 		time.Sleep(sleepTime)
-		statsLock.Lock()
+		t.stats.Lock()
 
-		tempOrderedPorts := make(PortCounts,0,len(sentPorts))
+		tempOrderedPorts := make(PortCounts,0,len(t.stats.sentPorts))
 
-		for port, count := range sentPorts{
+		for port, count := range t.stats.sentPorts{
 			tempOrderedPorts = append(tempOrderedPorts, PortCount{port,count})
 		}
 
@@ -173,17 +212,17 @@ func printStats(){
 			mostUsedPortsBuffer.WriteString(")")
 		}
 
-		rateBuffer.WriteString(strconv.FormatFloat(float64(totalSend) / sleepTime.Seconds(),'f',-1,64))
+		rateBuffer.WriteString(strconv.FormatFloat(float64(t.stats.totalSend) / sleepTime.Seconds(),'f',-1,64))
 		rateBuffer.WriteString(" msg/s")
 
-		zap.L().Info("Stats: ",
+		zap.L().Info("Stats for socket "+strconv.Itoa(t.fd)+": ",
 			zap.String("ports",mostUsedPortsBuffer.String()),
 			zap.String("rate",rateBuffer.String()))
 
-		sentPorts = make(map[string]int)
-		totalSend = 0
+		t.stats.sentPorts = make(map[string]int)
+		t.stats.totalSend = 0
 
-		statsLock.Unlock()
+		t.stats.Unlock()
 	}
 }
 
@@ -200,15 +239,15 @@ func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 		return
 	}
 
-	statsLock.Lock()
+	t.stats.Lock()
 	a := strings.Split(addr.String(),":")[1]
-	if _, ok := sentPorts[a] ; ok{
-		sentPorts[a] ++
+	if _, ok := t.stats.sentPorts[a] ; ok{
+		t.stats.sentPorts[a] ++
 	}else{
-		sentPorts[a] = 1
+		t.stats.sentPorts[a] = 1
 	}
-	totalSend++
-	statsLock.Unlock()
+	t.stats.totalSend++
+	t.stats.Unlock()
 
 	err = unix.Sendto(t.fd, data, 0, addrSA)
 	if err == unix.EPERM || err == unix.ENOBUFS {

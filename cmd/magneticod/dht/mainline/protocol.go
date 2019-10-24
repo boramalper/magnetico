@@ -13,7 +13,7 @@ import (
 type Protocol struct {
 	previousTokenSecret, currentTokenSecret []byte
 	tokenLock                               sync.Mutex
-	transport                               *Transport
+	transports                              Transports
 	eventHandlers                           ProtocolEventHandlers
 	started                                 bool
 }
@@ -37,7 +37,7 @@ type ProtocolEventHandlers struct {
 func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol) {
 	p = new(Protocol)
 	p.eventHandlers = eventHandlers
-	p.transport = NewTransport(laddr, p.onMessage, p.eventHandlers.OnCongestion)
+	p.transports = NewTransports(1,laddr, p.onMessage, p.eventHandlers.OnCongestion)
 
 	p.currentTokenSecret, p.previousTokenSecret = make([]byte, 20), make([]byte, 20)
 	_, err := rand.Read(p.currentTokenSecret)
@@ -55,9 +55,9 @@ func (p *Protocol) Start() {
 	}
 	p.started = true
 
-	p.transport.Start()
+	p.transports.Start()
+
 	go p.updateTokenSecret()
-	go printStats()
 }
 
 func (p *Protocol) Terminate() {
@@ -65,7 +65,7 @@ func (p *Protocol) Terminate() {
 		zap.L().Panic("Attempted to Terminate() a mainline/Protocol that has not been Start()ed! (Programmer error.)")
 	}
 
-	p.transport.Terminate()
+	p.transports.Terminate()
 }
 
 func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
@@ -186,7 +186,7 @@ func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
 }
 
 func (p *Protocol) SendMessage(msg *Message, addr *net.UDPAddr) {
-	p.transport.WriteMessages(msg, addr)
+	p.transports.WriteMessages(msg, addr)
 }
 
 func NewPingQuery(id []byte) *Message {
