@@ -9,6 +9,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var(
+	StatsPrintClock = 10*time.Second
+)
+
 type IndexingService struct {
 	// Private
 	protocol      *Protocol
@@ -162,7 +166,7 @@ func (is *IndexingService) findNeighbors() {
 		}
 
 		is.protocol.SendMessage(
-			NewSampleInfohashesQuery(is.nodeID, []byte("aa"), target),
+			NewSampleInfoHashesQuery(is.nodeID, []byte("aa"), target),
 			addr,
 		)
 	}
@@ -189,7 +193,7 @@ func (is *IndexingService) onFindNodeResponse(response *Message, addr *net.UDPAd
 			zap.L().Panic("Could NOT generate random bytes!")
 		}
 		is.protocol.SendMessage(
-			NewSampleInfohashesQuery(is.nodeID, []byte("aa"), target),
+			NewSampleInfoHashesQuery(is.nodeID, []byte("aa"), target),
 			&node.Addr,
 		)
 	}
@@ -236,6 +240,8 @@ func (is *IndexingService) onSampleInfoHashesResponse(msg *Message, addr *net.UD
 		var infoHash [20]byte
 		copy(infoHash[:], msg.R.Samples[i:(i+1)*20])
 
+		//zap.L().Debug("has" ,zap.String(":",hex.EncodeToString(infoHash[:])))
+
 		msg := NewGetPeersQuery(is.nodeID, infoHash[:])
 		t := uint16BE(is.counter)
 		msg.T = t[:]
@@ -266,7 +272,7 @@ func (is *IndexingService) onSampleInfoHashesResponse(msg *Message, addr *net.UD
 				zap.L().Panic("Could NOT generate random bytes!")
 			}
 			is.protocol.SendMessage(
-				NewSampleInfohashesQuery(is.nodeID, []byte("aa"), target),
+				NewSampleInfoHashesQuery(is.nodeID, []byte("aa"), target),
 				&node.Addr,
 			)
 		*/

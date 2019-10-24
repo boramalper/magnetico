@@ -14,7 +14,7 @@ services:
     image: boramalper/magneticow
     build:
       context: ./
-      dockerfile: Dockerfile.magneticowe
+      dockerfile: Dockerfile.magneticow
     volumes:
       - magneticod-data:/root/.local/share/magneticod
     depends_on:

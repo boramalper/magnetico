@@ -59,7 +59,6 @@ hence run:
     -v ~/.config/magneticod/configuration.toml:/root/.config/magneticod/configuration.toml \
     boramalper/magneticod
   ```
-  
 ### General flow
 1) Having  a list of nodes (initially bootstrapped with nodes given by default trackers), send
 queries to find information about stored hashes to each

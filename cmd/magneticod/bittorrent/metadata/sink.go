@@ -116,7 +116,6 @@ func (ms *Sink) Sink(res dht.Result) {
 	peerAddrs := res.PeerAddrs()
 
 	if _, exists := ms.incomingInfoHashes[infoHash]; exists {
-		//TODO should we not update info for that hash?
 		return
 	} else if len(peerAddrs) > 0 {
 		peer := peerAddrs[0]

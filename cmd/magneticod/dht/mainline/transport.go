@@ -2,7 +2,6 @@ package mainline
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/anacrolix/torrent/bencode"
 	sockaddr "github.com/libp2p/go-sockaddr/net"
 	"go.uber.org/zap"
@@ -14,6 +13,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+)
+
+var(
+	DefaultThrottleRate = -1 // <= 0 for unlimited requests
 )
 
 type Transport struct {
@@ -29,7 +32,10 @@ type Transport struct {
 	// OnCongestion
 	onCongestion func()
 
-	stats *Stats
+	stats *transportStats
+
+	throttlingRate int //available messages per second. If <=0, it is considered disabled
+	throttleTicketsChannel chan struct{} //channel giving tickets (allowance) to make send a message
 }
 type Transports []*Transport
 
@@ -41,7 +47,9 @@ func (ts Transports) GetRandom() *Transport{
 func NewTransports(size int,laddr string, onMessage func(*Message, *net.UDPAddr), onCongestion func()) (oTransports Transports) {
 	oTransports = make(Transports, 0, size)
 	for i := 0 ; i < size ; i++{
-		oTransports = append(oTransports, NewTransport(laddr,onMessage,onCongestion))
+		nt := NewTransport(laddr,onMessage,onCongestion)
+		nt.SetThrottle(DefaultThrottleRate)
+		oTransports = append(oTransports, nt)
 	}
 
 	return
@@ -77,6 +85,8 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 	t.buffer = make([]byte, 65507)
 	t.onMessage = onMessage
 	t.onCongestion = onCongestion
+	t.throttleTicketsChannel = make(chan struct{})
+	t.throttlingRate = 10000
 
 	var err error
 	t.laddr, err = net.ResolveUDPAddr("udp", laddr)
@@ -87,13 +97,16 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 		zap.L().Panic("IP address is not IPv4!")
 	}
 
-	t.stats = &Stats{
+	t.stats = &transportStats{
 		sentPorts: make(map[string]int),
 	}
 
 	return t
 }
 
+func (t *Transport) SetThrottle(rate int){
+	t.throttlingRate = rate
+}
 func (t *Transport) Start() {
 	// Why check whether the Transport `t` started or not, here and not -for instance- in
 	// t.Terminate()?
@@ -114,8 +127,6 @@ func (t *Transport) Start() {
 		zap.L().Fatal("Could NOT create a UDP socket!", zap.Error(err))
 	}
 
-	fmt.Println("created socket ",t.fd)
-
 	var ip [4]byte
 	copy(ip[:], t.laddr.IP.To4())
 	err = unix.Bind(t.fd, &unix.SockaddrInet4{Addr: ip, Port: t.laddr.Port})
@@ -124,6 +135,7 @@ func (t *Transport) Start() {
 	}
 
 	go t.readMessages()
+	go t.Throttle()
 	go t.printStats()
 }
 
@@ -163,46 +175,63 @@ func (t *Transport) readMessages() {
 			continue
 		}
 
+		t.stats.Lock()
+		t.stats.totalRead++
+		t.stats.Unlock()
 		t.onMessage(&msg, from)
 	}
 }
 
-type Stats struct{
+//statistics
+type transportStats struct{
 	sync.RWMutex
 	sentPorts map[string]int
 	totalSend int
+	totalRead int
 }
-type PortCount struct{
+func(ts *transportStats) Reset(){
+	//TODO keep self locking or should the caller lock?
+	ts.Lock()
+	defer ts.Unlock()
+	ts.sentPorts = make(map[string]int)
+	ts.totalSend = 0
+	ts.totalRead = 0
+}
+type statPortCount struct{
 	portNumber string
 	portCount int
 }
-type PortCounts []PortCount
-func (s PortCounts) Len() int {
+type statPortCounts []statPortCount
+func (s statPortCounts) Len() int {
 	return len(s)
 }
-func (s PortCounts) Swap(i, j int) {
+func (s statPortCounts) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
-func (s PortCounts) Less(i, j int) bool {
+func (s statPortCounts) Less(i, j int) bool {
 	return s[i].portCount > s[j].portCount
 }
 func (t *Transport) printStats(){
-	sleepTime := 5*time.Second
 	for{
-		time.Sleep(sleepTime)
-		t.stats.Lock()
+		time.Sleep(StatsPrintClock)
 
-		tempOrderedPorts := make(PortCounts,0,len(t.stats.sentPorts))
-
+		t.stats.RLock()
+		tempOrderedPorts := make(statPortCounts,0,len(t.stats.sentPorts))
+		currentTotalSend := t.stats.totalSend
+		currentTotalRead := t.stats.totalRead
 		for port, count := range t.stats.sentPorts{
-			tempOrderedPorts = append(tempOrderedPorts, PortCount{port,count})
+			tempOrderedPorts = append(tempOrderedPorts, statPortCount{port,count})
 		}
+		t.stats.RUnlock()
 
 		sort.Sort(tempOrderedPorts)
 
 		mostUsedPortsBuffer := bytes.Buffer{}
-		rateBuffer := bytes.Buffer{}
+		sendRateBuffer := bytes.Buffer{}
+		readRateBuffer := bytes.Buffer{}
+
 		for i,pc := range tempOrderedPorts{
+			//just keep the first 5 most used ports
 			if i > 5 {break}else if i > 0{
 				mostUsedPortsBuffer.WriteString(", ")}
 
@@ -212,21 +241,71 @@ func (t *Transport) printStats(){
 			mostUsedPortsBuffer.WriteString(")")
 		}
 
-		rateBuffer.WriteString(strconv.FormatFloat(float64(t.stats.totalSend) / sleepTime.Seconds(),'f',-1,64))
-		rateBuffer.WriteString(" msg/s")
+		sendRateBuffer.WriteString(strconv.FormatFloat(float64(currentTotalSend) / StatsPrintClock.Seconds(),'f',-1,64))
+		sendRateBuffer.WriteString(" msg/s")
 
-		zap.L().Info("Stats for socket "+strconv.Itoa(t.fd)+": ",
+		readRateBuffer.WriteString(strconv.FormatFloat(float64(currentTotalRead) / StatsPrintClock.Seconds(),'f',-1,64))
+		readRateBuffer.WriteString(" msg/s")
+
+		zap.L().Info("Transport stats for socket"+strconv.Itoa(t.fd)+" (on "+StatsPrintClock.String()+"):",
 			zap.String("ports",mostUsedPortsBuffer.String()),
-			zap.String("rate",rateBuffer.String()))
+			zap.String("send rate", sendRateBuffer.String()),
+			zap.String("read rate", readRateBuffer.String()),
+		)
 
-		t.stats.sentPorts = make(map[string]int)
-		t.stats.totalSend = 0
-
-		t.stats.Unlock()
+		//finally, reset stats
+		t.stats.Reset()
 	}
 }
 
+
+func (t *Transport) Throttle(){
+	if t.throttlingRate > 0{
+		resetChannel := make(chan struct{})
+
+		ticketer := func(resetRequest chan struct{}){
+			ticketGiven := 0
+			tooManyTicketGiven := false
+			for{
+				select{
+				case <- t.throttleTicketsChannel: {
+					ticketGiven++
+					if ticketGiven >= t.throttlingRate{
+						tooManyTicketGiven = true
+						break
+					}
+				}
+				case <- resetRequest: {
+					return
+				}
+				}
+
+				if tooManyTicketGiven{break}
+			}
+
+			<- resetRequest
+			return
+
+		}
+
+		go ticketer(resetChannel)
+		for range time.Tick(1*time.Second){
+			resetChannel <- struct{}{}
+
+			go ticketer(resetChannel)
+		}
+
+	}else{
+		//no limit, keep giving tickets to whoever requests it
+		for{
+			<-t.throttleTicketsChannel
+		}
+	}
+}
 func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
+	//get ticket
+	t.throttleTicketsChannel <- struct{}{}
+
 	data, err := bencode.Marshal(msg)
 	if err != nil {
 		zap.L().Panic("Could NOT marshal an outgoing message! (Programmer error.)")
