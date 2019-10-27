@@ -1,7 +1,13 @@
 package mainline
 
 import (
+	"bytes"
 	"net"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/anacrolix/torrent/bencode"
 	sockaddr "github.com/libp2p/go-sockaddr/net"
@@ -21,6 +27,8 @@ type Transport struct {
 	onMessage func(*Message, *net.UDPAddr)
 	// OnCongestion
 	onCongestion func()
+
+	stats *transportStats
 }
 
 func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onCongestion func()) *Transport {
@@ -47,6 +55,10 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 	}
 	if t.laddr.IP.To4() == nil {
 		zap.L().Panic("IP address is not IPv4!")
+	}
+
+	t.stats = &transportStats{
+		sentPorts: make(map[string]int),
 	}
 
 	return t
@@ -79,6 +91,7 @@ func (t *Transport) Start() {
 		zap.L().Fatal("Could NOT bind the socket!", zap.Error(err))
 	}
 
+	go t.printStats()
 	go t.readMessages()
 }
 
@@ -117,7 +130,84 @@ func (t *Transport) readMessages() {
 			continue
 		}
 
+		t.stats.Lock()
+		t.stats.totalRead++
+		t.stats.Unlock()
 		t.onMessage(&msg, from)
+	}
+}
+
+//statistics
+type transportStats struct{
+	sync.RWMutex
+	sentPorts map[string]int
+	totalSend int
+	totalRead int
+}
+func(ts *transportStats) Reset(){
+	ts.Lock()
+	defer ts.Unlock()
+	ts.sentPorts = make(map[string]int)
+	ts.totalSend = 0
+	ts.totalRead = 0
+}
+type statPortCount struct{
+	portNumber string
+	portCount int
+}
+type statPortCounts []statPortCount
+func (s statPortCounts) Len() int {
+	return len(s)
+}
+func (s statPortCounts) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s statPortCounts) Less(i, j int) bool {
+	return s[i].portCount > s[j].portCount
+}
+var totalSend int
+func (t *Transport) printStats(){
+	for{
+		time.Sleep(StatsPrintClock)
+		t.stats.RLock()
+		tempOrderedPorts := make(statPortCounts,0,len(t.stats.sentPorts))
+		currentTotalSend := t.stats.totalSend
+		currentTotalRead := t.stats.totalRead
+		for port, count := range t.stats.sentPorts{
+			tempOrderedPorts = append(tempOrderedPorts, statPortCount{port,count})
+		}
+		t.stats.RUnlock()
+
+		sort.Sort(tempOrderedPorts)
+
+		mostUsedPortsBuffer := bytes.Buffer{}
+		sendRateBuffer := bytes.Buffer{}
+		readRateBuffer := bytes.Buffer{}
+
+		for i,pc := range tempOrderedPorts{
+			if i > 5 {break}else if i > 0{
+				mostUsedPortsBuffer.WriteString(", ")}
+
+			mostUsedPortsBuffer.WriteString(pc.portNumber)
+			mostUsedPortsBuffer.WriteString("(")
+			mostUsedPortsBuffer.WriteString(strconv.Itoa(pc.portCount))
+			mostUsedPortsBuffer.WriteString(")")
+		}
+
+		sendRateBuffer.WriteString(strconv.FormatFloat(float64(currentTotalSend) / StatsPrintClock.Seconds(),'f',-1,64))
+		sendRateBuffer.WriteString(" msg/s")
+
+		readRateBuffer.WriteString(strconv.FormatFloat(float64(currentTotalRead) / StatsPrintClock.Seconds(),'f',-1,64))
+		readRateBuffer.WriteString(" msg/s")
+
+		zap.L().Info("Transport stats for socket "+strconv.Itoa(t.fd)+" (on "+StatsPrintClock.String()+"):",
+			zap.String("ports",mostUsedPortsBuffer.String()),
+			zap.String("send rate", sendRateBuffer.String()),
+			zap.String("read rate", readRateBuffer.String()),
+		)
+
+		//finally, reset stats
+		t.stats.Reset()
 	}
 }
 
@@ -126,13 +216,21 @@ func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
 	if err != nil {
 		zap.L().Panic("Could NOT marshal an outgoing message! (Programmer error.)")
 	}
-
 	addrSA := sockaddr.NetAddrToSockaddr(addr)
 	if addrSA == nil {
 		zap.L().Debug("Wrong net address for the remote peer!",
 			zap.String("addr", addr.String()))
 		return
 	}
+	t.stats.Lock()
+	a := strings.Split(addr.String(),":")[1]
+	if _, ok := t.stats.sentPorts[a] ; ok{
+		t.stats.sentPorts[a] ++
+	}else{
+		t.stats.sentPorts[a] = 1
+	}
+	t.stats.totalSend++
+	t.stats.Unlock()
 
 	err = unix.Sendto(t.fd, data, 0, addrSA)
 	if err == unix.EPERM || err == unix.ENOBUFS {

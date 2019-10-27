@@ -9,6 +9,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var(
+	StatsPrintClock = 10*time.Second
+)
+
 type IndexingService struct {
 	// Private
 	protocol      *Protocol
