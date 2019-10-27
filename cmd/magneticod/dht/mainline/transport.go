@@ -2,11 +2,16 @@ package mainline
 
 import (
 	"net"
+	"time"
 
 	"github.com/anacrolix/torrent/bencode"
 	sockaddr "github.com/libp2p/go-sockaddr/net"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
+)
+
+var(
+	DefaultThrottleRate = -1 // <= 0 for unlimited requests
 )
 
 type Transport struct {
@@ -21,6 +26,9 @@ type Transport struct {
 	onMessage func(*Message, *net.UDPAddr)
 	// OnCongestion
 	onCongestion func()
+
+	throttlingRate int //available messages per second. If <=0, it is considered disabled
+	throttleTicketsChannel chan struct{} //channel giving tickets (allowance) to make send a message
 }
 
 func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onCongestion func()) *Transport {
@@ -39,6 +47,8 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 	t.buffer = make([]byte, 65507)
 	t.onMessage = onMessage
 	t.onCongestion = onCongestion
+	t.throttleTicketsChannel = make(chan struct{})
+	t.throttlingRate = DefaultThrottleRate
 
 	var err error
 	t.laddr, err = net.ResolveUDPAddr("udp", laddr)
@@ -50,6 +60,10 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 	}
 
 	return t
+}
+
+func (t *Transport) SetThrottle(rate int){
+	t.throttlingRate = rate
 }
 
 func (t *Transport) Start() {
@@ -80,6 +94,7 @@ func (t *Transport) Start() {
 	}
 
 	go t.readMessages()
+	go t.Throttle()
 }
 
 func (t *Transport) Terminate() {
@@ -121,7 +136,54 @@ func (t *Transport) readMessages() {
 	}
 }
 
+func (t *Transport) Throttle(){
+	if t.throttlingRate > 0{
+		resetChannel := make(chan struct{})
+
+		dealer := func(resetRequest chan struct{}){
+			ticketGiven := 0
+			tooManyTicketGiven := false
+			for{
+				select{
+				case <- t.throttleTicketsChannel: {
+					ticketGiven++
+					if ticketGiven >= t.throttlingRate{
+						tooManyTicketGiven = true
+						break
+					}
+				}
+				case <- resetRequest: {
+					return
+				}
+				}
+
+				if tooManyTicketGiven{break}
+			}
+
+			<- resetRequest
+			return
+
+		}
+
+		go dealer(resetChannel)
+		for range time.Tick(1*time.Second){
+			resetChannel <- struct{}{}
+
+			go dealer(resetChannel)
+		}
+
+	}else{
+		//no limit, keep giving tickets to whoever requests it
+		for{
+			<-t.throttleTicketsChannel
+		}
+	}
+}
+
 func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
+	//get ticket
+	t.throttleTicketsChannel <- struct{}{}
+
 	data, err := bencode.Marshal(msg)
 	if err != nil {
 		zap.L().Panic("Could NOT marshal an outgoing message! (Programmer error.)")
