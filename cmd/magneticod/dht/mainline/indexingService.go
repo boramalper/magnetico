@@ -10,6 +10,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	StatsPrintClock = 10 * time.Second
+)
+
 type IndexingService struct {
 	// Private
 	protocol      *Protocol
@@ -79,8 +83,8 @@ func (is *IndexingService) Start() {
 	go is.index()
 
 	zap.L().Info("Indexing Service started!")
-	if DefaultThrottleRate > 0{
-		zap.L().Info("Throttle set to "+strconv.Itoa(DefaultThrottleRate)+" msg/s")
+	if DefaultThrottleRate > 0 {
+		zap.L().Info("Throttle set to " + strconv.Itoa(DefaultThrottleRate) + " msg/s")
 	}
 }
 

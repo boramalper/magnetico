@@ -141,8 +141,8 @@ func parseFlags() (*opFlags, error) {
 		IndexerInterval     uint     `long:"indexer-interval" description:"Indexing interval in integer seconds." default:"1"`
 		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"10000"`
 
-		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"200"`
-		MaxThrottle uint `long:"max-throttle" description:"Maximum requests per second." default:"0"`
+		LeechMaxN   uint `long:"leech-max-n" description:"Maximum number of leeches." default:"200"`
+		MaxRPS uint `long:"max-rps" description:"Maximum requests per second." default:"0"`
 
 		Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
 		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory"`
@@ -185,7 +185,7 @@ func parseFlags() (*opFlags, error) {
 		)
 	}
 
-	mainline.DefaultThrottleRate = int(cmdF.MaxThrottle)
+	mainline.DefaultThrottleRate = int(cmdF.MaxRPS)
 
 	opF.Verbosity = len(cmdF.Verbose)
 
