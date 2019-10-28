@@ -25,19 +25,13 @@ install:
   - set Path=%PATH%;c:\go\bin;c:\gopath\bin
   - go version
   - go env
-  - go get -u -v github.com/kevinburke/go-bindata/...
-  - go get -u -v honnef.co/go/tools/cmd/staticcheck
 
 before_build:
-  - go-bindata -o="cmd\magneticow\bindata.go" -prefix="cmd\magneticow\data\\" cmd\magneticow\data\...
-  - cd c:\gopath\src\magnetico
-  - dir c:\
-  - c:\dep.exe ensure -v
+  - go-bindata -o="cmd\magneticow\bindata.go" -prefix="cmd\magneticow\data\" cmd\magneticow\data\...
 
 build_script:
-  - go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" github.com/boramalper/magnetico/cmd/magneticod
-  - go install magnetico/magneticod
-  - go install magnetico/magneticow
+  - go install --tags fts5 "-ldflags=-s -w " .\cmd\magneticow
+  - go install --tags fts5 "-ldflags=-s -w " .\cmd\magneticod
 
 test_script:
   - go test -cover magnetico/magneticod/...

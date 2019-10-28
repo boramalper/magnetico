@@ -13,7 +13,7 @@ ADD ./pkg             /magnetico/pkg
 ADD ./go.mod          /magnetico/go.mod
 ADD ./cmd/magneticow  /magnetico/cmd/magneticow
 
-RUN     make magneticow
+RUN make magneticow
 
 FROM alpine:latest
 LABEL maintainer="bora@boramalper.org"

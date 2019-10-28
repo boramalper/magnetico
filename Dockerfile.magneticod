@@ -11,7 +11,7 @@ ADD ./pkg             /magnetico/pkg
 ADD ./go.mod          /magnetico/go.mod
 ADD ./cmd/magneticod  /magnetico/cmd/magneticod
 
-RUN     make magneticod
+RUN make magneticod
 
 FROM alpine:latest
 LABEL maintainer="bora@boramalper.org"
