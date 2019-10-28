@@ -25,6 +25,7 @@ install:
   - go env
   - go get -u -v github.com/kevinburke/go-bindata/...
   - go get -u -v honnef.co/go/tools/cmd/staticcheck
+  - choco install mingw
 
 before_build:
   - go-bindata -o="cmd\magneticow\bindata.go" -prefix="cmd\magneticow\data\\" cmd\magneticow\data\...
