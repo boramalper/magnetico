@@ -20,12 +20,12 @@ install:
   - rmdir c:\go /s /q
   - appveyor DownloadFile https://storage.googleapis.com/golang/go%GOVERSION%.windows-amd64.msi
   - msiexec /i go%GOVERSION%.windows-amd64.msi /q
-  - set Path=%PATH%;c:\go\bin;c:\gopath\bin
+  - choco install mingw
+  - set Path=%PATH%;c:\tools\mingw32\bin;c:\tools\mingw64\bin;c:\go\bin;c:\gopath\bin
   - go version
   - go env
   - go get -u -v github.com/kevinburke/go-bindata/...
   - go get -u -v honnef.co/go/tools/cmd/staticcheck
-  - choco install mingw
 
 before_build:
   - go-bindata -o="cmd\magneticow\bindata.go" -prefix="cmd\magneticow\data\\" cmd\magneticow\data\...
