@@ -29,7 +29,7 @@ install:
   - go get -u -v honnef.co/go/tools/cmd/staticcheck
 
 before_build:
-  - go-bindata -o="cmd\magneticow\bindata.go" -prefix="cmd\magneticow\data\" cmd\magneticow\data\...
+  - go-bindata -o="cmd\magneticow\bindata.go" -prefix="cmd\magneticow\data\\" cmd\magneticow\data\...
 
 build_script:
   - go install --tags fts5 "-ldflags=-s -w " .\cmd\magneticow
