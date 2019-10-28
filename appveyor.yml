@@ -25,6 +25,8 @@ install:
   - set Path=%PATH%;c:\go\bin;c:\gopath\bin
   - go version
   - go env
+  - go get -u -v github.com/kevinburke/go-bindata/...
+  - go get -u -v honnef.co/go/tools/cmd/staticcheck
 
 before_build:
   - go-bindata -o="cmd\magneticow\bindata.go" -prefix="cmd\magneticow\data\" cmd\magneticow\data\...
