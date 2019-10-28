@@ -21,6 +21,7 @@ install:
   - appveyor DownloadFile https://storage.googleapis.com/golang/go%GOVERSION%.windows-amd64.msi
   - msiexec /i go%GOVERSION%.windows-amd64.msi /q
   - choco install mingw
+  - dir C:\ProgramData\chocolatey\lib\mingw\tools\install
   - set Path=%PATH%;c:\tools\mingw32\bin;c:\tools\mingw64\bin;c:\go\bin;c:\gopath\bin
   - go version
   - go env
