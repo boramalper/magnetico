@@ -9,14 +9,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type out struct {
-	InfoHash string `json:"infoHash"`
-	Name     string `json:"name"`
-	Files    []File `json:"files"`
-}
-
-var notSupportedError = errors.New("This dummy database engine (\"stdout\") does not support any sort of queries")
-
 func makeStdoutDatabase(_ *url.URL) (Database, error) {
 	s := new(stdout)
 	s.encoder = json.NewEncoder(os.Stdout)
@@ -24,11 +16,13 @@ func makeStdoutDatabase(_ *url.URL) (Database, error) {
 }
 
 type stdout struct {
+	WriteOnlyDatabase
 	encoder *json.Encoder
 }
 
 func (s *stdout) Engine() databaseEngine {
-	return Stdout
+	s.kind = Stdout
+	return s.kind
 }
 
 func (s *stdout) DoesTorrentExist(infoHash []byte) (bool, error) {
@@ -41,7 +35,7 @@ func (s *stdout) DoesTorrentExist(infoHash []byte) (bool, error) {
 }
 
 func (s *stdout) AddNewTorrent(infoHash []byte, name string, files []File) error {
-	err := s.encoder.Encode(out{
+	err := s.encoder.Encode(SimpleTorrentSummary{
 		InfoHash: hex.EncodeToString(infoHash),
 		Name:     name,
 		Files:    files,
@@ -55,32 +49,4 @@ func (s *stdout) AddNewTorrent(infoHash []byte, name string, files []File) error
 
 func (s *stdout) Close() error {
 	return os.Stdout.Sync()
-}
-
-func (s *stdout) GetNumberOfTorrents() (uint, error) {
-	return 0, notSupportedError
-}
-
-func (s *stdout) QueryTorrents(
-	query string,
-	epoch int64,
-	orderBy OrderingCriteria,
-	ascending bool,
-	limit uint,
-	lastOrderedValue *float64,
-	lastID *uint64,
-) ([]TorrentMetadata, error) {
-	return nil, notSupportedError
-}
-
-func (s *stdout) GetTorrent(infoHash []byte) (*TorrentMetadata, error) {
-	return nil, notSupportedError
-}
-
-func (s *stdout) GetFiles(infoHash []byte) ([]File, error) {
-	return nil, notSupportedError
-}
-
-func (s *stdout) GetStatistics(from string, n uint) (*Statistics, error) {
-	return nil, notSupportedError
 }
