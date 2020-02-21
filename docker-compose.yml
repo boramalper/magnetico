@@ -7,6 +7,8 @@ services:
       - ${MAGNETICOD_DATA}:/root/.local/share/magneticod
       - ${MAGNETICOD_CONFIG}:/root/.config/magneticod
     network_mode: "host"
+    cmd:
+      - "--indexer-addr=0.0.0.0:1212"
 
   magneticow:
     image: boramalper/magneticow
