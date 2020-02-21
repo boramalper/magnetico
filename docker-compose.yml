@@ -2,19 +2,13 @@ version: "2"
 
 services:
   magneticod:
-    build:
-      image: boramalper/magneticod
-#      context: .
-#      dockerfile: Dockerfile.magneticod
+    image: boramalper/magneticod
     volumes:
       - magneticod-data:/root/.local/share/magneticod
       - magneticod-config:/root/.config/magneticod
 
   magneticow:
-    build:
-      image: boramalper/magneticow
-#      context: .
-#      dockerfile: Dockerfile.magneticow
+    image: boramalper/magneticow
     volumes:
       - magneticod-data:/root/.local/share/magneticod
     depends_on:
