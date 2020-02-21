@@ -12,7 +12,7 @@ services:
     image: boramalper/magneticow
     volumes:
       - ${MAGNETICOD_DATA}:/root/.local/share/magneticod
-      - ${MAGNETICOW_CONFIG}:/root/.config/magneticod
+      - ${MAGNETICOW_CONFIG}:/root/.config/magneticow
     depends_on:
       # It doesn't necessarily "depend" on magneticod, but you would probably like to start them at the same time.
       - magneticod
