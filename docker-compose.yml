@@ -4,14 +4,15 @@ services:
   magneticod:
     image: boramalper/magneticod
     volumes:
-      - magneticod-data:/root/.local/share/magneticod
-      - magneticod-config:/root/.config/magneticod
+      - ${MAGNETICOD_DATA}:/root/.local/share/magneticod
+      - ${MAGNETICOD_CONFIG}:/root/.config/magneticod
     network_mode: "host"
 
   magneticow:
     image: boramalper/magneticow
     volumes:
-      - magneticod-data:/root/.local/share/magneticod
+      - ${MAGNETICOD_DATA}:/root/.local/share/magneticod
+      - ${MAGNETICOW_CONFIG}:/root/.config/magneticod
     depends_on:
       # It doesn't necessarily "depend" on magneticod, but you would probably like to start them at the same time.
       - magneticod
