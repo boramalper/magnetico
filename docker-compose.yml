@@ -6,6 +6,7 @@ services:
     volumes:
       - magneticod-data:/root/.local/share/magneticod
       - magneticod-config:/root/.config/magneticod
+    network: host
 
   magneticow:
     image: boramalper/magneticow
