@@ -13,17 +13,17 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/text/encoding/charmap"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/storage"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
+	"golang.org/x/text/encoding/charmap"
 
 	"github.com/boramalper/magnetico/pkg/persistence"
 )
 
 type ApiReadmeHandler struct {
-	client *torrent.Client
+	client  *torrent.Client
 	tempdir string
 }
 
@@ -97,9 +97,9 @@ func (h *ApiReadmeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	zap.L().Warn("WAITING FOR INFO")
 
 	select {
-	case <- t.GotInfo():
+	case <-t.GotInfo():
 
-	case <- time.After(30 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, http.StatusInternalServerError, "Timeout")
 		return
 	}
@@ -124,7 +124,7 @@ func (h *ApiReadmeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cancel if the file is larger than 50 KiB
-	if file.Length() > 50 * 1024 {
+	if file.Length() > 50*1024 {
 		w.WriteHeader(http.StatusRequestEntityTooLarge)
 		return
 	}
