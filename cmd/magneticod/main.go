@@ -94,7 +94,7 @@ func main() {
 
 	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, logger)
 	if err != nil {
-		logger.Sugar().Fatalf("Could not open the database at `%s`", opFlags.DatabaseURL, zap.Error(err))
+		logger.Fatal("Could not open the database", zap.String("url", opFlags.DatabaseURL), zap.Error(err))
 	}
 
 	trawlingManager := dht.NewManager(opFlags.IndexerAddrs, opFlags.IndexerInterval, opFlags.IndexerMaxNeighbors)
