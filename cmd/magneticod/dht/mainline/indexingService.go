@@ -233,6 +233,13 @@ func (is *IndexingService) onSampleInfohashesResponse(msg *Message, addr *net.UD
 		is.counter++
 	}
 
+	// TODO: good idea, but also need to track how long they have been here
+	//if msg.R.Num > len(msg.R.Samples) / 20 &&  time.Duration(msg.R.Interval) <= is.interval {
+	//	if addr.Port != 0 {  // ignore nodes who "use" port 0...
+	//		is.routingTable[string(msg.R.ID)] = addr
+	//	}
+	//}
+
 	// iterate
 	is.routingTableMutex.Lock()
 	defer is.routingTableMutex.Unlock()
