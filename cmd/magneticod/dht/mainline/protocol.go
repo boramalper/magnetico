@@ -173,8 +173,10 @@ func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
 			}
 		}
 	case "e":
-		// TODO: currently ignoring Server Error 202
-		if msg.E.Code != 202 {
+		// Ignore the following:
+		//   - 202  Server Error
+		//   - 204  Method Unknown / Unknown query type
+		if msg.E.Code != 202 && msg.E.Code != 204 {
 			zap.L().Sugar().Debugf("Protocol error received: `%s` (%d)", msg.E.Message, msg.E.Code)
 		}
 	default:
