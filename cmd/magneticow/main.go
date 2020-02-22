@@ -102,6 +102,12 @@ func main() {
 		}
 	}()
 
+	apiReadmeHandler, err := NewApiReadmeHandler()
+	if err != nil {
+		zap.L().Fatal("Could not initialise readme handler", zap.Error(err))
+	}
+	defer apiReadmeHandler.Close()
+
 	router := mux.NewRouter()
 	router.HandleFunc("/",
 		BasicAuth(rootHandler, "magneticow"))
@@ -114,6 +120,8 @@ func main() {
 		BasicAuth(apiTorrent, "magneticow"))
 	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}/filelist",
 		BasicAuth(apiFilelist, "magneticow"))
+	router.Handle("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}/readme",
+		apiReadmeHandler)
 
 	router.HandleFunc("/feed",
 		BasicAuth(feedHandler, "magneticow"))
@@ -171,7 +179,6 @@ func main() {
 	templates["feed"] = template.Must(template.New("feed").Funcs(templateFunctions).Parse(string(mustAsset("templates/feed.xml"))))
 	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
 
-	var err error
 	database, err = persistence.MakeDatabase(opts.Database, logger)
 	if err != nil {
 		zap.L().Fatal("could not access to database", zap.Error(err))
@@ -190,7 +197,7 @@ func main() {
 // TODO: I think there is a standard lib. function for this
 func respondError(w http.ResponseWriter, statusCode int, format string, a ...interface{}) {
 	w.WriteHeader(statusCode)
-	w.Write([]byte(fmt.Sprintf(format, a...)))
+	_, _ = w.Write([]byte(fmt.Sprintf(format, a...)))
 }
 
 func mustAsset(name string) []byte {

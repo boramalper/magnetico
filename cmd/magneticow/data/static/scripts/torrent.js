@@ -8,7 +8,7 @@
 "use strict";
 
 
-window.onload = function() {
+window.onload = function () {
     let infoHash = window.location.pathname.split("/")[2];
 
     fetch("/api/v0.1/torrents/" + infoHash).then(x => x.json()).then(x => {
@@ -16,7 +16,7 @@ window.onload = function() {
 
         const template = document.getElementById("main-template").innerHTML;
         document.querySelector("main").innerHTML = Mustache.render(template, {
-            name:     x.name,
+            name: x.name,
             infoHash: x.infoHash,
             sizeHumanised: fileSize(x.size),
             discoveredOnHumanised: humaniseDate(x.discoveredOn),
@@ -35,11 +35,24 @@ window.onload = function() {
                     tree.add({
                         id: pathElems.slice(0, i + 1).join("/"),
                         parent: i >= 1 ? pathElems.slice(0, i).join("/") : undefined,
-                        label: pathElems[i] + ( i === pathElems.length - 1 ? "&emsp;<tt>" + fileSize(e.size) + "</tt>" : ""),
+                        label: pathElems[i] + (i === pathElems.length - 1 ? "&emsp;<tt>" + fileSize(e.size) + "</tt>" : ""),
                         opened: true,
                     });
                 }
             }
         });
+
+        myFetch("/api/v0.1/torrents/" + infoHash + "/readme")
+            .then(response => {
+                return response.text();
+            })
+            .then(x => {
+                const readme = document.getElementById("readme");
+                readme.innerText = x;
+            })
+            .catch(err => {
+                const readme = document.getElementById("readme");
+                readme.innerText = err;
+            });
     });
 };

@@ -22,6 +22,7 @@ require (
 	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f
 	golang.org/x/sys v0.0.0-20190516110030-61b9204099cb
+	golang.org/x/text v0.3.0
 )
 
 go 1.13

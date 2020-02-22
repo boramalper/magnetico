@@ -1,17 +1,162 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/boramalper/magnetico/pkg/persistence"
+	"golang.org/x/text/encoding/charmap"
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/storage"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
+
+	"github.com/boramalper/magnetico/pkg/persistence"
 )
+
+type ApiReadmeHandler struct {
+	client *torrent.Client
+	tempdir string
+}
+
+func NewApiReadmeHandler() (*ApiReadmeHandler, error) {
+	h := new(ApiReadmeHandler)
+	var err error
+
+	h.tempdir, err = ioutil.TempDir("", "magneticod_")
+	if err != nil {
+		return nil, err
+	}
+
+	config := torrent.NewDefaultClientConfig()
+	config.ListenPort = 0
+	config.DefaultStorage = storage.NewFileByInfoHash(h.tempdir)
+
+	h.client, err = torrent.NewClient(config)
+	if err != nil {
+		_ = os.RemoveAll(h.tempdir)
+		return nil, err
+	}
+
+	return h, nil
+}
+
+func (h *ApiReadmeHandler) Close() {
+	h.client.Close()
+	_ = os.RemoveAll(h.tempdir)
+}
+
+func (h *ApiReadmeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	infohashHex := mux.Vars(r)["infohash"]
+
+	infohash, err := hex.DecodeString(infohashHex)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "couldn't decode infohash: %s", err.Error())
+		return
+	}
+
+	files, err := database.GetFiles(infohash)
+	if err != nil {
+		zap.L().Error("GetFiles error", zap.Error(err))
+		respondError(w, http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	ok := false
+	for _, file := range files {
+		if strings.HasSuffix(file.Path, ".nfo") {
+			ok = true
+			break
+		} else if strings.Contains(file.Path, "read") {
+			ok = true
+			break
+		}
+	}
+
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	zap.L().Warn("README")
+
+	t, err := h.client.AddMagnet("magnet:?xt=urn:btih:" + infohashHex)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	defer t.Drop()
+
+	zap.L().Warn("WAITING FOR INFO")
+
+	select {
+	case <- t.GotInfo():
+
+	case <- time.After(30 * time.Second):
+		respondError(w, http.StatusInternalServerError, "Timeout")
+		return
+	}
+
+	zap.L().Warn("GOT INFO!")
+
+	t.CancelPieces(0, t.NumPieces())
+
+	var file *torrent.File
+	for _, file = range t.Files() {
+		filePath := file.Path()
+		if strings.HasSuffix(filePath, ".nfo") {
+			break
+		} else if strings.Contains(filePath, "read") {
+			break
+		}
+	}
+
+	if file == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// Cancel if the file is larger than 50 KiB
+	if file.Length() > 50 * 1024 {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	file.Download()
+
+	reader := file.NewReader()
+	// BEWARE:
+	//     ioutil.ReadAll(reader)
+	// returns some adjancent garbage too, for reasons unknown...
+	content := make([]byte, file.Length())
+	_, err = io.ReadFull(reader, content)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	if strings.HasSuffix(file.Path(), ".nfo") {
+		content, err = charmap.CodePage437.NewDecoder().Bytes(content)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Because .nfo files are right padded with \x00'es.
+	content = bytes.TrimRight(content, "\x00")
+
+	w.Header().Set("Content-Type", "text/plain;charset=UTF-8")
+	_, _ = w.Write(content)
+}
 
 func apiTorrents(w http.ResponseWriter, r *http.Request) {
 	// @lastOrderedValue AND @lastID are either both supplied or neither of them should be supplied
