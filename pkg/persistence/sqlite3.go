@@ -31,7 +31,11 @@ func makeSqlite3Database(url_ *url.URL) (Database, error) {
 	}
 
 	var err error
-	url_.Scheme = ""
+	// To handle spaces in the file path, we ensure that URI path handling is triggered in the
+	// sqlite3 driver, and that escaping is applied to the URL on this side. See issue #240.
+	url_.Scheme = "file"
+	// To ensure that // isn't injected into the URI. The query is still handled.
+	url_.Opaque=url_.Path
 	db.conn, err = sql.Open("sqlite3", url_.String())
 	if err != nil {
 		return nil, errors.Wrap(err, "sql.Open")
