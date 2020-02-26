@@ -19,6 +19,8 @@ WORKDIR /
 VOLUME /root/.local/share/magneticod
 VOLUME /root/.config/magneticow
 
+RUN apk add --no-cache libgcc libstdc++
+
 COPY --from=build /go/bin/magneticow /magneticow
 
 ENTRYPOINT ["/magneticow"]
