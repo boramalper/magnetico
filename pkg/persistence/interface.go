@@ -42,6 +42,35 @@ type Database interface {
 	GetStatistics(from string, n uint) (*Statistics, error)
 }
 
+//implements only a subset (the read functions) of Database
+type WriteOnlyDatabase struct{kind databaseEngine}
+func (wod *WriteOnlyDatabase) WriteOnlyError() error{
+	return errors.New(`This dummy storage engine ("`+wod.kind.String()+`") is write-only`)
+}
+func (wod *WriteOnlyDatabase) GetTorrent(infoHash []byte) (*TorrentMetadata, error) {
+	return nil, wod.WriteOnlyError()
+}
+func (wod *WriteOnlyDatabase) GetFiles(infoHash []byte) ([]File, error) {
+	return nil, wod.WriteOnlyError()
+}
+func (wod *WriteOnlyDatabase) GetStatistics(from string, n uint) (*Statistics, error) {
+	return nil, wod.WriteOnlyError()
+}
+func (wod *WriteOnlyDatabase) GetNumberOfTorrents() (uint, error) {
+	return 0, wod.WriteOnlyError()
+}
+func (wod *WriteOnlyDatabase) QueryTorrents(
+	query string,
+	epoch int64,
+	orderBy OrderingCriteria,
+	ascending bool,
+	limit uint,
+	lastOrderedValue *float64,
+	lastID *uint64,
+) ([]TorrentMetadata, error) {
+	return nil, wod.WriteOnlyError()
+}
+
 type OrderingCriteria uint8
 
 const (
@@ -57,10 +86,18 @@ const (
 // TODO: search `swtich (orderBy)` and see if all cases are covered all the time
 
 type databaseEngine uint8
+func( dbe databaseEngine) String() string{
+	switch dbe{
+	case Sqlite3:{return "Sqlite3"}
+	case Stdout:{return "Stdout"}
+	default:
+		return "unnamed"
+	}
+}
 
 const (
-	Sqlite3 databaseEngine = 1
-	Stdout
+	Sqlite3    databaseEngine = 1
+	Stdout     databaseEngine = 3
 )
 
 type Statistics struct {
@@ -86,6 +123,12 @@ type TorrentMetadata struct {
 	DiscoveredOn int64   `json:"discoveredOn"`
 	NFiles       uint    `json:"nFiles"`
 	Relevance    float64 `json:"relevance"`
+}
+
+type SimpleTorrentSummary struct {
+	InfoHash string `json:"infoHash"`
+	Name     string `json:"name"`
+	Files    []File `json:"files"`
 }
 
 func (tm *TorrentMetadata) MarshalJSON() ([]byte, error) {
