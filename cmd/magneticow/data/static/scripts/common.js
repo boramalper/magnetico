@@ -32,6 +32,22 @@ function humaniseDate(unixTime) {
     });
 }
 
+// a fetch() that errs on anything but HTTP 2XX
+// Source: https://github.com/github/fetch/issues/155#issuecomment-108288863
+function myFetch(url, options) {
+    if (options == null) options = {}
+    if (options.credentials == null) options.credentials = 'same-origin'
+    return fetch(url, options).then(function(response) {
+        if (response.status >= 200 && response.status < 300) {
+            return Promise.resolve(response)
+        } else {
+            var error = new Error(response.statusText || response.status)
+            error.response = response
+            return Promise.reject(error)
+        }
+    })
+}
+
 /**
  * Returns the ISO 8601 week number for this date.
  *

@@ -71,7 +71,25 @@ for torrents in the network, hence removing the need for centralised torrent web
 2. Install **magneticow** afterwards by following its
    [installation instructions](cmd/magneticow/README.md).
 
-*Alternatively*, just grab it from [Docker Hub](https://hub.docker.com/u/boramalper)!
+### Docker
+
+Run **magneticod** and **magneticow** with:
+
+``` bash
+make docker
+```
+
+It will run magnetico from already built image on [Docker Hub](https://hub.docker.com/u/boramalper)!
+
+You should access magneticow at <http://localhost:8080>.
+
+To build fresh images from source, first run:
+
+``` bash
+make image
+```
+
+Then run `make docker`. It ensures you run updated images of magnetico.
 
 ## License
 

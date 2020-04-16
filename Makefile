@@ -11,6 +11,21 @@ magneticow:
 	go-bindata -o="cmd/magneticow/bindata.go" -prefix="cmd/magneticow/data/" cmd/magneticow/data/...
 	go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" ./cmd/magneticow
 
+.PHONY: docker
+docker: docker_up docker_logs
+
+.PHONY: docker_up
+docker_up:
+	docker-compose up -d
+
+.PHONY: docker_down
+docker_down:
+	docker-compose down
+
+.PHONY: docker_logs
+docker_logs:
+	docker-compose logs -ft --tail=10
+
 image-magneticod:
 	docker build -t boramalper/magneticod -f Dockerfile.magneticod .
 
