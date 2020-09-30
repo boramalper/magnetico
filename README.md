@@ -1,22 +1,22 @@
-# magnetico
+# Magnetico
 *Autonomous (self-hosted) BitTorrent DHT search engine suite.*
 
 [![chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/magnetico-dev/magnetico-dev)&emsp;[![Build Status on Travis](https://travis-ci.org/boramalper/magnetico.svg?branch=master)](https://travis-ci.org/boramalper/magnetico)&emsp;[![Build status on AppVeyor](https://ci.appveyor.com/api/projects/status/u2jtbe6jutya7p0x/branch/master?svg=true)](https://ci.appveyor.com/project/boramalper/magnetico/branch/master)&emsp;[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1029/badge)](https://bestpractices.coreinfrastructure.org/projects/1029)
 
-magnetico is the first autonomous (self-hosted) BitTorrent DHT search engine suite that is *designed
+Magnetico is the first autonomous (self-hosted) BitTorrent DHT search engine suite that is *designed
 for end-users*. The suite consists of two packages:
 
 - **magneticod:** Autonomous BitTorrent DHT crawler and metadata fetcher.
 - **magneticow:** Lightweight web interface for magnetico.
 
-Both programs, combined together, allows anyone with a decent Internet connection to access the vast
+Both programs, if combined together, allows anyone with a decent Internet connection to access the vast
 amount of torrents waiting to be discovered within the BitTorrent DHT space, *without relying on any
 central entity*.
 
 **magnetico** liberates BitTorrent from the yoke of centralised trackers & web-sites and makes it
 *truly decentralised*. Finally!
 
-## Features
+## Key Features
 - Easy installation & minimal requirements:
   - [Pre-compiled static binaries](https://github.com/boramalper/magnetico/releases) and [Docker images](https://hub.docker.com/u/boramalper) are provided.
   - Root access is *not* required to install or to use.
