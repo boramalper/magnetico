@@ -16,7 +16,7 @@ central entity*.
 **magnetico** liberates BitTorrent from the yoke of centralised trackers & web-sites and makes it
 *truly decentralised*. Finally!
 
-## Features
+## Important Features
 - Easy installation & minimal requirements:
   - [Pre-compiled static binaries](https://github.com/boramalper/magnetico/releases) and [Docker images](https://hub.docker.com/u/boramalper) are provided.
   - Root access is *not* required to install or to use.
