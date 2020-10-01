@@ -1,5 +1,5 @@
 # magnetico
-*Autonomous (self-hosted) BitTorrent DHT search engine suite.*
+* Autonomous (self-hosted) BitTorrent DHT search engine suite.*
 
 [![chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/magnetico-dev/magnetico-dev)&emsp;[![Build Status on Travis](https://travis-ci.org/boramalper/magnetico.svg?branch=master)](https://travis-ci.org/boramalper/magnetico)&emsp;[![Build status on AppVeyor](https://ci.appveyor.com/api/projects/status/u2jtbe6jutya7p0x/branch/master?svg=true)](https://ci.appveyor.com/project/boramalper/magnetico/branch/master)&emsp;[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1029/badge)](https://bestpractices.coreinfrastructure.org/projects/1029)
 
@@ -13,7 +13,7 @@ Both programs, combined together, allows anyone with a decent Internet connectio
 amount of torrents waiting to be discovered within the BitTorrent DHT space, *without relying on any
 central entity*.
 
-**magnetico** liberates BitTorrent from the yoke of centralised trackers & web-sites and makes it
+<magnetico> liberates BitTorrent from the yoke of centralised trackers & web-sites and makes it
 *truly decentralised*. Finally!
 
 ## Features
@@ -24,17 +24,17 @@ central entity*.
   - Both programs work out of the box, and **magneticow** can be used without a web-server too.
   - Detailed, step-by-step manual to guide you through the installation.
 - No reliance on any centralised entity:
-  - **magneticod** trawls the BitTorrent DHT by "going" from one node to another, and fetches the
+  -> <magneticod> trawls the BitTorrent DHT by "going" from one node to another, and fetches the
     metadata using the nodes without using trackers.
 - Resilience:
   - Unlike client-server model that web applications use, P2P networks are *chaotic* and
-    **magneticod** is designed to handle all the operational errors accordingly.
+  -> <magneticod> is designed to handle all the operational errors accordingly.
     - Currently on paper, wait for the v1.0!
 - High performance implementation in Go:
-  - **magneticod** utilizes every bit of your resources to discover as many infohashes & metadata as
+  -> <magneticod> utilizes every bit of your resources to discover as many infohashes & metadata as
     possible.
 - Built-in lightweight web interface:
-  - **magneticow** features a lightweight web interface to help you access the database without
+  -> <magneticow> features a lightweight web interface to help you access the database without
     getting on your way.
 
 ### Screenshots
