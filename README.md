@@ -1,4 +1,4 @@
-# magnetico
+# magnetico - An Amazing Project
 *Autonomous (self-hosted) BitTorrent DHT search engine suite.*
 
 [![chat on gitter](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/magnetico-dev/magnetico-dev)&emsp;[![Build Status on Travis](https://travis-ci.org/boramalper/magnetico.svg?branch=master)](https://travis-ci.org/boramalper/magnetico)&emsp;[![Build status on AppVeyor](https://ci.appveyor.com/api/projects/status/u2jtbe6jutya7p0x/branch/master?svg=true)](https://ci.appveyor.com/project/boramalper/magnetico/branch/master)&emsp;[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1029/badge)](https://bestpractices.coreinfrastructure.org/projects/1029)
