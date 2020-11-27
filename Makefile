@@ -61,7 +61,17 @@ format:
 #     Because `read` is a bash command.
 #     https://stackoverflow.com/a/589300/4466589
 #
+# How to ignore bindata.go
+#     Due to irrational insistence of some Go developers, gofmt, like many
+#     other tools of Go ecosystem, does not have flags for common scenarios
+#     such as ignoring certain files by pattern etc. Thus we use `go list`
+#     and grep together to achieve the desired result.
+#
+#     The original query is this:
+#         gofmt -l $(go list -f $'{{range .GoFiles}}{{$.Dir}}/{{.}}\n{{end}}' ./... | grep -v bindata.go)
+#
+#     The original query is then escaped for Makefile (by repeating dollar signs $ -> $$).
 check-formatting: SHELL:=/bin/bash   # HERE: this is setting the shell for check-formatting only
 check-formatting:
-	! gofmt -l ./cmd/ 2>&1 | tee /dev/fd/2 | read
-	! gofmt -l ./pkg/ 2>&1 | tee /dev/fd/2 | read
+	! gofmt -l $$(go list -f $$'{{range .GoFiles}}{{$$.Dir}}/{{.}}\n{{end}}' ./... | grep -v bindata.go) 2>&1 | tee /dev/fd/2 | read
+	! gofmt -l $$(go list -f $$'{{range .GoFiles}}{{$$.Dir}}/{{.}}\n{{end}}' ./... | grep -v bindata.go) 2>&1 | tee /dev/fd/2 | read
