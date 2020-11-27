@@ -31,7 +31,11 @@ func makeSqlite3Database(url_ *url.URL) (Database, error) {
 	}
 
 	var err error
-	url_.Scheme = ""
+	// To handle spaces in the file path, we ensure that URI path handling is triggered in the
+	// sqlite3 driver, and that escaping is applied to the URL on this side. See issue #240.
+	url_.Scheme = "file"
+	// To ensure that // isn't injected into the URI. The query is still handled.
+	url_.Opaque = url_.Path
 	db.conn, err = sql.Open("sqlite3", url_.String())
 	if err != nil {
 		return nil, errors.Wrap(err, "sql.Open")
@@ -214,8 +218,8 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 	}
 	defer rows.Close()
 
-	if rows.Next() != true {
-		return 0, fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`")
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows returned from `SELECT MAX(ROWID)`")
 	}
 
 	var n *uint
@@ -380,7 +384,7 @@ func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 		return nil, err
 	}
 
-	if rows.Next() != true {
+	if !rows.Next() {
 		return nil, nil
 	}
 
@@ -543,8 +547,8 @@ func (db *sqlite3Database) setupDatabase() error {
 	}
 	defer rows.Close()
 	var userVersion int
-	if rows.Next() != true {
-		return fmt.Errorf("sql.Rows.Next (user_version): PRAGMA user_version did not return any rows!")
+	if !rows.Next() {
+		return fmt.Errorf("sql.Rows.Next (user_version): PRAGMA user_version did not return any rows")
 	}
 	if err = rows.Scan(&userVersion); err != nil {
 		return errors.Wrap(err, "sql.Rows.Scan (user_version)")

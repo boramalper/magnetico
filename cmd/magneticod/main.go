@@ -56,8 +56,8 @@ func main() {
 		return
 	}
 
-	zap.L().Info("magneticod v0.8.0 has been started.")
-	zap.L().Info("Copyright (C) 2017-2019  Mert Bora ALPER <bora@boramalper.org>.")
+	zap.L().Info("magneticod v0.12.0 has been started.")
+	zap.L().Info("Copyright (C) 2017-2020  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 	zap.S().Infof("Compiled on %s", compiledOn)
 
@@ -94,7 +94,7 @@ func main() {
 
 	database, err := persistence.MakeDatabase(opFlags.DatabaseURL, logger)
 	if err != nil {
-		logger.Sugar().Fatalf("Could not open the database at `%s`", opFlags.DatabaseURL, zap.Error(err))
+		logger.Fatal("Could not open the database", zap.String("url", opFlags.DatabaseURL), zap.Error(err))
 	}
 
 	trawlingManager := dht.NewManager(opFlags.IndexerAddrs, opFlags.IndexerInterval, opFlags.IndexerMaxNeighbors)
@@ -138,9 +138,9 @@ func parseFlags() (*opFlags, error) {
 
 		IndexerAddrs        []string `long:"indexer-addr" description:"Address(es) to be used by indexing DHT nodes." default:"0.0.0.0:0"`
 		IndexerInterval     uint     `long:"indexer-interval" description:"Indexing interval in integer seconds." default:"1"`
-		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"10000"`
+		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"1000"`
 
-		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"200"`
+		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"50"`
 
 		Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
 		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory"`

@@ -36,8 +36,8 @@ type ProtocolEventHandlers struct {
 
 func NewProtocol(laddr string, eventHandlers ProtocolEventHandlers) (p *Protocol) {
 	p = new(Protocol)
-	p.transport = NewTransport(laddr, p.onMessage, p.eventHandlers.OnCongestion)
 	p.eventHandlers = eventHandlers
+	p.transport = NewTransport(laddr, p.onMessage, p.eventHandlers.OnCongestion)
 
 	p.currentTokenSecret, p.previousTokenSecret = make([]byte, 20), make([]byte, 20)
 	_, err := rand.Read(p.currentTokenSecret)
@@ -173,8 +173,10 @@ func (p *Protocol) onMessage(msg *Message, addr *net.UDPAddr) {
 			}
 		}
 	case "e":
-		// TODO: currently ignoring Server Error 202
-		if msg.E.Code != 202 {
+		// Ignore the following:
+		//   - 202  Server Error
+		//   - 204  Method Unknown / Unknown query type
+		if msg.E.Code != 202 && msg.E.Code != 204 {
 			zap.L().Sugar().Debugf("Protocol error received: `%s` (%d)", msg.E.Message, msg.E.Code)
 		}
 	default:
@@ -325,6 +327,7 @@ func validatePingORannouncePeerResponseMessage(msg *Message) bool {
 }
 
 func validateFindNodeResponseMessage(msg *Message) bool {
+	//lint:ignore S1008 to be done later
 	if len(msg.R.ID) != 20 {
 		return false
 	}

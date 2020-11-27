@@ -33,18 +33,14 @@ the repository `boramalper/magnetico`. Images are tagged as `d-vMAJOR.MINOR.PATC
    This is to prevent excessive number of ``EPERM`` "Operation not permitted" errors, which also has a negative impact
    on the performance.
 
-### Configuration
-Configuration file can be found at:
-
-- **On Linux**
-
-      ~/.config/magneticod/configuration.toml
-
-
 ## Usage
 ### Database
 **magneticod** is designed to be able to use different database engines to store its data, but
-currently only SQLite 3 is supported. The database file can be found in:
+currently only SQLite 3 and PostgreSQL 9+ are supported.
+
+#### SQLite
+
+The database file can be found in:
 
 - **On Linux**
 
@@ -52,6 +48,10 @@ currently only SQLite 3 is supported. The database file can be found in:
 
 **magneticod** uses write-ahead logging (WAL) for its database, so there might be multiple
 files while it is operating, but ``database.sqlite3`` is *the database*.
+
+#### More engines (PostgreSQL and others)
+
+You can read about other supported persistence engines [here](pkg/README.md).
 
 ### Using the Docker Image
 You need to mount
@@ -62,15 +62,12 @@ You need to mount
 hence run:
 
   ```bash
-  docker run \
+  docker run -it --rm \
     -v ~/.local/share/magneticod:/root/.local/share/magneticod/ \
     -v ~/.config/magneticod/configuration.toml:/root/.config/magneticod/configuration.toml \
-    magneticod
+    boramalper/magneticod
   ```
   
-__Tip:__ Containers that you terminate won't be removed; run
-`docker rm $(docker ps -q -f status=exited)` to remove exited containers.
-
 ### Remark About the Network Usage
 **magneticod** does *not* have any built-in rate limiter *yet*, and it will literally suck the hell out of your
 bandwidth. Unless you are running **magneticod** on a separate machine dedicated for it, you might want to consider

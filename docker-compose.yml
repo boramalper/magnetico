@@ -1,25 +1,19 @@
-version: "3"
-
-volumes:
-  home:
+version: "2"
 
 services:
   magneticod:
-    build:
-      context: .
-      dockerfile: Dockerfile.magneticod
+    image: boramalper/magneticod:latest
     volumes:
-      - home:/home/magnetico
+      - ${MAGNETICOD_DATA}:/root/.local/share/magneticod
+      - ${MAGNETICOD_CONFIG}:/root/.config/magneticod
+    network_mode: "host"
+    command:
+      - "--indexer-addr=0.0.0.0:1212"
 
   magneticow:
-    build:
-      context: .
-      dockerfile: Dockerfile.magneticow
+    image: boramalper/magneticow:latest
     volumes:
-      - home:/home/magnetico
-    depends_on:
-      # It doesn't necessarily "depend" on magneticod, but you would probably like to start them at the same time.
-      - magneticod
-
+      - ${MAGNETICOD_DATA}:/root/.local/share/magneticod
+      - ${MAGNETICOW_CONFIG}:/root/.config/magneticow
     ports:
       - "8080:8080"

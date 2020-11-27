@@ -10,6 +10,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var NotImplementedError = errors.New("Function not implemented")
+
 type Database interface {
 	Engine() databaseEngine
 	DoesTorrentExist(infoHash []byte) (bool, error)
@@ -59,7 +61,9 @@ const (
 type databaseEngine uint8
 
 const (
-	Sqlite3 databaseEngine = 1
+	Sqlite3 databaseEngine = iota + 1
+	Postgres
+	Stdout
 )
 
 type Statistics struct {
@@ -112,8 +116,11 @@ func MakeDatabase(rawURL string, logger *zap.Logger) (Database, error) {
 	case "sqlite3":
 		return makeSqlite3Database(url_)
 
-	case "postgresql":
-		return nil, fmt.Errorf("postgresql is not yet supported")
+	case "postgres":
+		return makePostgresDatabase(url_)
+
+	case "stdout":
+		return makeStdoutDatabase(url_)
 
 	case "mysql":
 		return nil, fmt.Errorf("mysql is not yet supported")

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/pkg/errors"
 	"html/template"
 	"io"
 	"net/http"
@@ -16,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/Wessie/appdirs"
 	"github.com/dustin/go-humanize"
@@ -60,8 +61,8 @@ func main() {
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
 
-	zap.L().Info("magneticow v0.8 has been started.")
-	zap.L().Info("Copyright (C) 2017-2019  Mert Bora ALPER <bora@boramalper.org>.")
+	zap.L().Info("magneticow v0.12.0 has been started.")
+	zap.L().Info("Copyright (C) 2017-2020  Mert Bora ALPER <bora@boramalper.org>.")
 	zap.L().Info("Dedicated to Cemile Binay, in whose hands I thrived.")
 	zap.S().Infof("Compiled on %s", compiledOn)
 
@@ -101,6 +102,12 @@ func main() {
 		}
 	}()
 
+	apiReadmeHandler, err := NewApiReadmeHandler()
+	if err != nil {
+		zap.L().Fatal("Could not initialise readme handler", zap.Error(err))
+	}
+	defer apiReadmeHandler.Close()
+
 	router := mux.NewRouter()
 	router.HandleFunc("/",
 		BasicAuth(rootHandler, "magneticow"))
@@ -113,6 +120,8 @@ func main() {
 		BasicAuth(apiTorrent, "magneticow"))
 	router.HandleFunc("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}/filelist",
 		BasicAuth(apiFilelist, "magneticow"))
+	router.Handle("/api/v0.1/torrents/{infohash:[a-f0-9]{40}}/readme",
+		apiReadmeHandler)
 
 	router.HandleFunc("/feed",
 		BasicAuth(feedHandler, "magneticow"))
@@ -170,7 +179,6 @@ func main() {
 	templates["feed"] = template.Must(template.New("feed").Funcs(templateFunctions).Parse(string(mustAsset("templates/feed.xml"))))
 	templates["homepage"] = template.Must(template.New("homepage").Funcs(templateFunctions).Parse(string(mustAsset("templates/homepage.html"))))
 
-	var err error
 	database, err = persistence.MakeDatabase(opts.Database, logger)
 	if err != nil {
 		zap.L().Fatal("could not access to database", zap.Error(err))
@@ -189,7 +197,7 @@ func main() {
 // TODO: I think there is a standard lib. function for this
 func respondError(w http.ResponseWriter, statusCode int, format string, a ...interface{}) {
 	w.WriteHeader(statusCode)
-	w.Write([]byte(fmt.Sprintf(format, a...)))
+	_, _ = w.Write([]byte(fmt.Sprintf(format, a...)))
 }
 
 func mustAsset(name string) []byte {
@@ -287,7 +295,7 @@ func loadCred(cred string) error {
 		 */
 		re := regexp.MustCompile(`^[a-z](?:_?[a-z0-9])*:\$2[aby]?\$\d{1,2}\$[./A-Za-z0-9]{53}$`)
 		if !re.Match(line) {
-			return fmt.Errorf("on line %d: format should be: <USERNAME>:<BCRYPT HASH>", lineno)
+			return fmt.Errorf("on line %d: format should be: <USERNAME>:<BCRYPT HASH>, instead got: %s", lineno, line)
 		}
 
 		tokens := bytes.Split(line, []byte(":"))

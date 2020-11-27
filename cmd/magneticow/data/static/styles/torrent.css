@@ -78,3 +78,18 @@ tt {
     font-style: italic;
     font-size: smaller;
 }
+
+@font-face {
+    font-family: 'PxPlus-IBM-VGA8';
+    src: URL('/static/fonts/PxPlus_IBM_VGA8/pxplus_ibm_vga8-webfont.woff') format('woff');
+}
+
+#readme {
+    padding: 1em;
+    display: inline-block;
+    background-color: black;
+    color: white;
+    font-family: 'PxPlus-IBM-VGA8', monospace;
+    line-height: 1em;
+    letter-spacing: -0.5px;
+}

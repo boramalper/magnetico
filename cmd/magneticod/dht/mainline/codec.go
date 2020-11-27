@@ -40,7 +40,7 @@ type Message struct {
 }
 
 type QueryArguments struct {
-	// ID of the quirying Node
+	// ID of the querying Node
 	ID []byte `bencode:"id"`
 	// InfoHash of the torrent
 	InfoHash []byte `bencode:"info_hash,omitempty"`
@@ -273,7 +273,7 @@ func (e *Error) UnmarshalBencode(b []byte) (err error) {
 	}
 
 	if len(matches[2]) != msgLen {
-		return fmt.Errorf("error message have different lengths (%d vs %d) \"%s\"!", len(matches[2]), msgLen, matches[2])
+		return fmt.Errorf("error message have different lengths (%d vs %d) \"%s\"", len(matches[2]), msgLen, matches[2])
 	}
 
 	e.Code = code

@@ -13,8 +13,6 @@
     <script src="/static/scripts/naturalSort-v0.8.1.js"></script>
     <script src="/static/scripts/mustache-v2.3.0.min.js"></script>
     <script src="/static/scripts/vanillatree-v0.0.3.js"></script>
-    <script src="/static/scripts/common.js"></script>
-    <script src="/static/scripts/torrent.js"></script>
 
     <!-- Goes into <main> -->
     <script id="main-template" type="text/x-handlebars-template">
@@ -22,7 +20,7 @@
             <h2>{{ name }}</h2>
             <a href="magnet:?xt=urn:btih:{{ infoHash }}&amp;dn={{ name }}">
                 <img src="/static/assets/magnet.gif" alt="Magnet link"
-                     title="Download this torrent using magnet" />
+                     title="Download this torrent using magnet"/>
                 <small>{{ infoHash }}</small>
             </a>
         </div>
@@ -42,8 +40,11 @@
             </tr>
         </table>
 
-        <h3>Better Files</h3>
+        <h3>Files</h3>
         <div id="fileTree"></div>
+
+        <h3>Readme</h3>
+        <pre id="readme">Loading...</pre>
     </script>
 </head>
 <body>
@@ -56,5 +57,8 @@
 <main>
 
 </main>
+
+<script src="/static/scripts/common.js"></script>
+<script src="/static/scripts/torrent.js"></script>
 </body>
 </html>

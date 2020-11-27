@@ -39,7 +39,6 @@ func torrentsInfohashHandler(w http.ResponseWriter, r *http.Request) {
 	// Cache static resources for a day
 	w.Header().Set("Cache-Control", "max-age=86400")
 	_, _ = w.Write(data)
-	return
 }
 
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {
