@@ -273,7 +273,7 @@ func (e *Error) UnmarshalBencode(b []byte) (err error) {
 	}
 
 	if len(matches[2]) != msgLen {
-		return fmt.Errorf("error message have different lengths (%d vs %d) \"%s\"!", len(matches[2]), msgLen, matches[2])
+		return fmt.Errorf("error message have different lengths (%d vs %d) \"%s\"", len(matches[2]), msgLen, matches[2])
 	}
 
 	e.Code = code

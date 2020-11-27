@@ -218,8 +218,8 @@ func (db *sqlite3Database) GetNumberOfTorrents() (uint, error) {
 	}
 	defer rows.Close()
 
-	if rows.Next() != true {
-		return 0, fmt.Errorf("No rows returned from `SELECT MAX(ROWID)`")
+	if !rows.Next() {
+		return 0, fmt.Errorf("no rows returned from `SELECT MAX(ROWID)`")
 	}
 
 	var n *uint
@@ -384,7 +384,7 @@ func (db *sqlite3Database) GetTorrent(infoHash []byte) (*TorrentMetadata, error)
 		return nil, err
 	}
 
-	if rows.Next() != true {
+	if !rows.Next() {
 		return nil, nil
 	}
 
@@ -547,8 +547,8 @@ func (db *sqlite3Database) setupDatabase() error {
 	}
 	defer rows.Close()
 	var userVersion int
-	if rows.Next() != true {
-		return fmt.Errorf("sql.Rows.Next (user_version): PRAGMA user_version did not return any rows!")
+	if !rows.Next() {
+		return fmt.Errorf("sql.Rows.Next (user_version): PRAGMA user_version did not return any rows")
 	}
 	if err = rows.Scan(&userVersion); err != nil {
 		return errors.Wrap(err, "sql.Rows.Scan (user_version)")

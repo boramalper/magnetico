@@ -471,7 +471,7 @@ func toBigEndian(i uint, n int) []byte {
 		binary.BigEndian.PutUint32(b, uint32(i))
 
 	default:
-		panic(fmt.Sprintf("n must be 1, 2, or 4!"))
+		panic("n must be 1, 2, or 4!")
 	}
 
 	if len(b) != n {
