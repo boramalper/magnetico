@@ -10,6 +10,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var NotImplementedError = errors.New("Function not implemented")
+
 type Database interface {
 	Engine() databaseEngine
 	DoesTorrentExist(infoHash []byte) (bool, error)
@@ -59,8 +61,8 @@ const (
 type databaseEngine uint8
 
 const (
-	Sqlite3  databaseEngine = 1
-	Postgres databaseEngine = 2
+	Sqlite3 databaseEngine = iota + 1
+	Postgres
 	Stdout
 )
 

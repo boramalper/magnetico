@@ -197,11 +197,7 @@ func (db *postgresDatabase) QueryTorrents(
 	lastOrderedValue *float64,
 	lastID *uint64,
 ) ([]TorrentMetadata, error) {
-	err := fmt.Errorf("QueryTorrents is not supported yet by PostgreSQL backend")
-
-	torrents := make([]TorrentMetadata, 0)
-
-	return torrents, err
+	return nil, NotImplementedError
 }
 
 func (db *postgresDatabase) GetTorrent(infoHash []byte) (*TorrentMetadata, error) {
@@ -259,7 +255,7 @@ func (db *postgresDatabase) GetFiles(infoHash []byte) ([]File, error) {
 }
 
 func (db *postgresDatabase) GetStatistics(from string, n uint) (*Statistics, error) {
-	panic("Not implemented yet for PostgreSQL")
+	return nil, NotImplementedError
 }
 
 func (db *postgresDatabase) setupDatabase() error {

@@ -15,8 +15,6 @@ type out struct {
 	Files    []File `json:"files"`
 }
 
-var notSupportedError = errors.New("This dummy database engine (\"stdout\") does not support any sort of queries")
-
 func makeStdoutDatabase(_ *url.URL) (Database, error) {
 	s := new(stdout)
 	s.encoder = json.NewEncoder(os.Stdout)
@@ -58,7 +56,7 @@ func (s *stdout) Close() error {
 }
 
 func (s *stdout) GetNumberOfTorrents() (uint, error) {
-	return 0, notSupportedError
+	return 0, NotImplementedError
 }
 
 func (s *stdout) QueryTorrents(
@@ -70,17 +68,17 @@ func (s *stdout) QueryTorrents(
 	lastOrderedValue *float64,
 	lastID *uint64,
 ) ([]TorrentMetadata, error) {
-	return nil, notSupportedError
+	return nil, NotImplementedError
 }
 
 func (s *stdout) GetTorrent(infoHash []byte) (*TorrentMetadata, error) {
-	return nil, notSupportedError
+	return nil, NotImplementedError
 }
 
 func (s *stdout) GetFiles(infoHash []byte) ([]File, error) {
-	return nil, notSupportedError
+	return nil, NotImplementedError
 }
 
 func (s *stdout) GetStatistics(from string, n uint) (*Statistics, error) {
-	return nil, notSupportedError
+	return nil, NotImplementedError
 }
