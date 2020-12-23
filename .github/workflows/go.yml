@@ -1,10 +1,6 @@
 name: Go
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+on: [push, pull_request]
 
 jobs:
   build:
@@ -23,7 +19,7 @@ jobs:
     - name: Install go-bindata
       run: |
         go get -u -v github.com/kevinburke/go-bindata/...
-    
+
     - name: Build
       run: |
         make magneticod
