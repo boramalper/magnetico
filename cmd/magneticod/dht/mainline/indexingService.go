@@ -3,10 +3,15 @@ package mainline
 import (
 	"math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
+)
+
+var (
+	StatsPrintClock = 10 * time.Second
 )
 
 type IndexingService struct {
@@ -77,6 +82,9 @@ func (is *IndexingService) Start() {
 	go is.index()
 
 	zap.L().Info("Indexing Service started!")
+	if DefaultThrottleRate > 0 {
+		zap.L().Info("Throttle set to " + strconv.Itoa(DefaultThrottleRate) + " msg/s")
+	}
 }
 
 func (is *IndexingService) Terminate() {

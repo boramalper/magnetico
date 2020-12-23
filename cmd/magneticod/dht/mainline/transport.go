@@ -1,12 +1,22 @@
 package mainline
 
 import (
-	"net"
-
+	"bytes"
 	"github.com/anacrolix/torrent/bencode"
 	sockaddr "github.com/libp2p/go-sockaddr/net"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
+	"net"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+var (
+	//Throttle rate that transport will have at Start time. Set <= 0 for unlimited requests
+	DefaultThrottleRate = -1
 )
 
 type Transport struct {
@@ -21,6 +31,10 @@ type Transport struct {
 	onMessage func(*Message, *net.UDPAddr)
 	// OnCongestion
 	onCongestion func()
+
+	throttlingRate         int           //available messages per second. If <=0, it is considered disabled
+	throttleTicketsChannel chan struct{} //channel giving tickets (allowance) to make send a message
+	stats                  *transportStats
 }
 
 func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onCongestion func()) *Transport {
@@ -39,6 +53,8 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 	t.buffer = make([]byte, 65507)
 	t.onMessage = onMessage
 	t.onCongestion = onCongestion
+	t.throttleTicketsChannel = make(chan struct{})
+	t.SetThrottle(DefaultThrottleRate)
 
 	var err error
 	t.laddr, err = net.ResolveUDPAddr("udp", laddr)
@@ -49,7 +65,16 @@ func NewTransport(laddr string, onMessage func(*Message, *net.UDPAddr), onConges
 		zap.L().Panic("IP address is not IPv4!")
 	}
 
+	t.stats = &transportStats{
+		sentPorts: make(map[string]int),
+	}
+
 	return t
+}
+
+//Sets t throttle rate at runtime
+func (t *Transport) SetThrottle(rate int) {
+	t.throttlingRate = rate
 }
 
 func (t *Transport) Start() {
@@ -79,7 +104,9 @@ func (t *Transport) Start() {
 		zap.L().Fatal("Could NOT bind the socket!", zap.Error(err))
 	}
 
+	go t.printStats()
 	go t.readMessages()
+	go t.Throttle()
 }
 
 func (t *Transport) Terminate() {
@@ -117,22 +144,167 @@ func (t *Transport) readMessages() {
 			continue
 		}
 
+		t.stats.Lock()
+		t.stats.totalRead++
+		t.stats.Unlock()
 		t.onMessage(&msg, from)
 	}
 }
 
+//Manages throttling for transport. To be called as a routine at Start time. Should never return.
+func (t *Transport) Throttle() {
+	if t.throttlingRate > 0 {
+		resetChannel := make(chan struct{})
+
+		dealer := func(resetRequest chan struct{}) {
+			ticketGiven := 0
+			tooManyTicketGiven := false
+			for {
+				select {
+				case <-t.throttleTicketsChannel:
+					{
+						ticketGiven++
+						if ticketGiven >= t.throttlingRate {
+							tooManyTicketGiven = true
+							break
+						}
+					}
+				case <-resetRequest:
+					{
+						return
+					}
+				}
+
+				if tooManyTicketGiven {
+					break
+				}
+			}
+
+			<-resetRequest
+			return
+
+		}
+
+		go dealer(resetChannel)
+		for range time.Tick(1 * time.Second) {
+			resetChannel <- struct{}{}
+
+			go dealer(resetChannel)
+		}
+
+	} else {
+		//no limit, keep giving tickets to whoever requests it
+		for {
+			<-t.throttleTicketsChannel
+		}
+	}
+}
+
+//statistics
+type transportStats struct {
+	sync.RWMutex
+	sentPorts map[string]int
+	totalSend int
+	totalRead int
+}
+
+func (ts *transportStats) Reset() {
+	ts.Lock()
+	defer ts.Unlock()
+	ts.sentPorts = make(map[string]int)
+	ts.totalSend = 0
+	ts.totalRead = 0
+}
+
+type statPortCount struct {
+	portNumber string
+	portCount  int
+}
+type statPortCounts []statPortCount
+
+func (s statPortCounts) Len() int {
+	return len(s)
+}
+func (s statPortCounts) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s statPortCounts) Less(i, j int) bool {
+	return s[i].portCount > s[j].portCount
+}
+
+var totalSend int
+
+func (t *Transport) printStats() {
+	for {
+		time.Sleep(StatsPrintClock)
+		t.stats.RLock()
+		tempOrderedPorts := make(statPortCounts, 0, len(t.stats.sentPorts))
+		currentTotalSend := t.stats.totalSend
+		currentTotalRead := t.stats.totalRead
+		for port, count := range t.stats.sentPorts {
+			tempOrderedPorts = append(tempOrderedPorts, statPortCount{port, count})
+		}
+		t.stats.RUnlock()
+
+		sort.Sort(tempOrderedPorts)
+
+		mostUsedPortsBuffer := bytes.Buffer{}
+		sendRateBuffer := bytes.Buffer{}
+		readRateBuffer := bytes.Buffer{}
+
+		for i, pc := range tempOrderedPorts {
+			if i > 5 {
+				break
+			} else if i > 0 {
+				mostUsedPortsBuffer.WriteString(", ")
+			}
+
+			mostUsedPortsBuffer.WriteString(pc.portNumber)
+			mostUsedPortsBuffer.WriteString("(")
+			mostUsedPortsBuffer.WriteString(strconv.Itoa(pc.portCount))
+			mostUsedPortsBuffer.WriteString(")")
+		}
+
+		sendRateBuffer.WriteString(strconv.FormatFloat(float64(currentTotalSend)/StatsPrintClock.Seconds(), 'f', -1, 64))
+		sendRateBuffer.WriteString(" msg/s")
+
+		readRateBuffer.WriteString(strconv.FormatFloat(float64(currentTotalRead)/StatsPrintClock.Seconds(), 'f', -1, 64))
+		readRateBuffer.WriteString(" msg/s")
+
+		zap.L().Info("Transport stats for socket "+strconv.Itoa(t.fd)+" (on "+StatsPrintClock.String()+"):",
+			zap.String("ports", mostUsedPortsBuffer.String()),
+			zap.String("send rate", sendRateBuffer.String()),
+			zap.String("read rate", readRateBuffer.String()),
+		)
+
+		//finally, reset stats
+		t.stats.Reset()
+	}
+}
+
 func (t *Transport) WriteMessages(msg *Message, addr *net.UDPAddr) {
+	//get ticket
+	t.throttleTicketsChannel <- struct{}{}
+
 	data, err := bencode.Marshal(msg)
 	if err != nil {
 		zap.L().Panic("Could NOT marshal an outgoing message! (Programmer error.)")
 	}
-
 	addrSA := sockaddr.NetAddrToSockaddr(addr)
 	if addrSA == nil {
 		zap.L().Debug("Wrong net address for the remote peer!",
 			zap.String("addr", addr.String()))
 		return
 	}
+	t.stats.Lock()
+	a := strings.Split(addr.String(), ":")[1]
+	if _, ok := t.stats.sentPorts[a]; ok {
+		t.stats.sentPorts[a]++
+	} else {
+		t.stats.sentPorts[a] = 1
+	}
+	t.stats.totalSend++
+	t.stats.Unlock()
 
 	err = unix.Sendto(t.fd, data, 0, addrSA)
 	if err == unix.EPERM || err == unix.ENOBUFS {

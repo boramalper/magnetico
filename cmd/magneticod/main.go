@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/boramalper/magnetico/cmd/magneticod/dht/mainline"
 	"math/rand"
 	"net"
 	"os"
@@ -140,7 +141,8 @@ func parseFlags() (*opFlags, error) {
 		IndexerInterval     uint     `long:"indexer-interval" description:"Indexing interval in integer seconds." default:"1"`
 		IndexerMaxNeighbors uint     `long:"indexer-max-neighbors" description:"Maximum number of neighbors of an indexer." default:"1000"`
 
-		LeechMaxN uint `long:"leech-max-n" description:"Maximum number of leeches." default:"50"`
+		LeechMaxN   uint `long:"leech-max-n" description:"Maximum number of leeches." default:"50"`
+		MaxRPS uint `long:"max-rps" description:"Maximum requests per second." default:"0"`
 
 		Verbose []bool `short:"v" long:"verbose" description:"Increases verbosity."`
 		Profile string `long:"profile" description:"Enable profiling." choice:"cpu" choice:"memory"`
@@ -182,6 +184,8 @@ func parseFlags() (*opFlags, error) {
 				"Setting maximum number of leeches greater than 1k might cause \"too many open files\" errors!",
 		)
 	}
+
+	mainline.DefaultThrottleRate = int(cmdF.MaxRPS)
 
 	opF.Verbosity = len(cmdF.Verbose)
 
