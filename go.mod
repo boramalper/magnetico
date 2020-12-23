@@ -1,5 +1,7 @@
 module github.com/boramalper/magnetico
 
+go 1.15
+
 require (
 	github.com/Wessie/appdirs v0.0.0-20141031215813-6573e894f8e2
 	github.com/anacrolix/dht v1.0.1 // indirect
@@ -11,6 +13,7 @@ require (
 	github.com/google/pprof v0.0.0-20190515194954-54271f7e092f // indirect
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/schema v1.1.0
+	github.com/iwanbk/gobeanstalk v0.0.0-20160903043409-dbbb23937c31
 	github.com/jackc/pgx/v4 v4.9.2
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/kevinburke/go-bindata v3.16.0+incompatible // indirect
@@ -28,5 +31,3 @@ require (
 	golang.org/x/tools v0.0.0-20200221224223-e1da425f72fd // indirect
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
-
-go 1.13
