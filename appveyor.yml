@@ -20,15 +20,13 @@ install:
   - go version
   - go env
   - go get -u -v github.com/kevinburke/go-bindata/...
-  - go get -u -v honnef.co/go/tools/cmd/staticcheck
-
-before_build:
-  - C:\MinGW\bin\mingw32-make.exe staticcheck
-  - C:\MinGW\bin\mingw32-make.exe check-formatting
 
 build_script:
-  - C:\MinGW\bin\mingw32-make.exe magneticod
-  - C:\MinGW\bin\mingw32-make.exe magneticow
+  # Build magneticod
+  - go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" ./cmd/magneticod
+  # Build magneticow
+  - go-bindata -pkg "main" -o="cmd/magneticow/bindata.go" -prefix="cmd/magneticow/data/" cmd/magneticow/data/...
+  - go install --tags fts5 "-ldflags=-s -w -X main.compiledOn=`date -u +%Y-%m-%dT%H:%M:%SZ`" ./cmd/magneticow
 
 test_script:
-  - C:\MinGW\bin\mingw32-make.exe test
+  - go test ./...
