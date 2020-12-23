@@ -23,12 +23,12 @@ install:
   - go get -u -v honnef.co/go/tools/cmd/staticcheck
 
 before_build:
-  - make staticcheck
-  - make check-formatting
+  - C:\MinGW\bin\mingw32-make.exe staticcheck
+  - C:\MinGW\bin\mingw32-make.exe check-formatting
 
 build_script:
-  - make magneticod
-  - make magneticow
+  - C:\MinGW\bin\mingw32-make.exe magneticod
+  - C:\MinGW\bin\mingw32-make.exe magneticow
 
 test_script:
-  - make test
+  - C:\MinGW\bin\mingw32-make.exe test
