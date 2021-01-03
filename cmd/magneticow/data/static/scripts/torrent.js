@@ -9,7 +9,7 @@
 
 
 window.onload = function () {
-    let infoHash = window.location.pathname.split("/")[2];
+    let infoHash = window.location.pathname.split("/").pop();
 
     fetch("/api/v0.1/torrents/" + infoHash).then(x => x.json()).then(x => {
         document.querySelector("title").innerText = x.name + " - magneticow";
