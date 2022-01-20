@@ -1,3 +1,11 @@
+> # Archival Notice
+>
+> Hello! 👋 I've been working on **magnetico** since 2017 (less so in the recent years) and seeing so many people interested in it and using it has been a great source of joy and pride for me. However, I have decided that it is for the best to acknowledge and admit openly that I no longer have as much time as I did in high school, nor any willingness to spend the little time I now have by working on **magnetico** or any other [free software](https://en.wikipedia.org/wiki/Free_software) in general, except what I think is [the most important problem in the world](http://www.aaronsw.com/weblog/productivity#:~:text=not%20working%20on-,the%20most%20important%20problem%20in%20the%20world,-\)%20but%20each%20little) that I can work on at that moment.
+>
+> Fork it, improve it, ship it; keep up the good fight against scarcity. ☀️
+>
+> Bora <bora at [boramalper.org](https://boramalper.org/)>
+
 # magnetico
 *Autonomous (self-hosted) BitTorrent DHT search engine suite.*
 
